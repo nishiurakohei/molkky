@@ -143,22 +143,32 @@ function applyScore(cur, add) {
 }
 
 // --- Components ---
-function ScoreInput({ name, score, c0, isActive, onScore }) {
+// 1. ScoreInputの代わりにこのパネル部品を定義
+function ScorePanel({ onScore, disabled }) {
   return (
-    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8, opacity: isActive ? 1 : 0.4}}>
-      <div className={`turn-indicator ${isActive ? 'turn-active' : ''}`}>{isActive ? '投擲中' : '待機'}</div>
-      <div style={{fontSize:16, fontWeight:'bold'}}>{name}</div>
-      <div className="big-score" style={{color: score>=40 ? '#639922' : undefined}}>{score}</div>
-      {c0 > 0 && <div style={{fontSize:12, color:'#E24B4A', fontWeight:'bold'}}>ミス: {c0}回</div>}
-      <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, width:'100%'}}>
-        {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(v => (
-          <button key={v} disabled={!isActive} className={`score-btn${v===0?' zero':''}`} onClick={()=>onScore(v)}>{v}</button>
-        ))}
-      </div>
+    <div style={{
+      display:'grid', 
+      gridTemplateColumns:'repeat(4, 1fr)', 
+      gap: '10px', 
+      width:'100%',
+      marginTop: '10px'
+    }}>
+      {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(v => (
+        <button 
+          key={v} 
+          disabled={disabled}
+          className={`score-btn${v===0?' zero':''}`} 
+          onClick={()=>onScore(v)}
+          style={{ height: '60px' }}
+        >
+          {v}
+        </button>
+      ))}
     </div>
   );
 }
 
+// 2. GameViewをまるごと差し替え
 function GameView({ match, players, onResult, onCancel }) {
   const pData = [players[match.p1], players[match.p2]];
   const [game, setGame] = useState({
@@ -199,6 +209,8 @@ function GameView({ match, players, onResult, onCancel }) {
     });
   };
 
+  const currentScores = game.scores[game.leg - 1];
+
   return (
     <div style={{display:'flex', flexDirection:'column', gap:10}}>
       {game.choicePending && (
@@ -216,23 +228,42 @@ function GameView({ match, players, onResult, onCancel }) {
           </div>
         </div></div>
       )}
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-        <span style={{fontWeight:'bold'}}>第{game.leg}本目</span>
+
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom: '1px solid var(--border)', paddingBottom: '10px'}}>
+        <span style={{fontWeight:'bold', color: 'var(--accent)'}}>第{game.leg}本目</span>
         <button className="btn btn-sm" onClick={()=> {setGame(prevGame); setPrevGame(null);}} disabled={!prevGame || game.done}>↩ 戻す</button>
       </div>
+
+      <div className="card" style={{margin: '10px 0', padding: '15px 5px'}}>
+        <div style={{display: 'flex', justifyContent: 'space-around', alignItems: 'center'}}>
+          <div style={{textAlign:'center', flex:1, opacity: game.activeIdx === 0 ? 1 : 0.4}}>
+            <div style={{fontSize:'12px', fontWeight:'bold', height:'18px'}}>{game.activeIdx === 0 ? '●投擲' : ''}</div>
+            <div style={{fontSize:'16px', fontWeight:'bold'}}>{pData[0].name}</div>
+            {game.c0[0] > 0 && <div style={{color:'red', fontSize:'10px'}}>ミス:{game.c0[0]}</div>}
+          </div>
+          <div style={{flex:1.5, textAlign:'center'}}>
+            <div style={{fontSize:'42px', fontWeight:'bold', letterSpacing:'1px'}}>{currentScores[0]} - {currentScores[1]}</div>
+            <div style={{fontSize:'11px', color:'var(--text-sub)'}}>セット数 {game.legWins[0]} - {game.legWins[1]}</div>
+          </div>
+          <div style={{textAlign:'center', flex:1, opacity: game.activeIdx === 1 ? 1 : 0.4}}>
+            <div style={{fontSize:'12px', fontWeight:'bold', height:'18px'}}>{game.activeIdx === 1 ? '●投擲' : ''}</div>
+            <div style={{fontSize:'16px', fontWeight:'bold'}}>{pData[1].name}</div>
+            {game.c0[1] > 0 && <div style={{color:'red', fontSize:'10px'}}>ミス:{game.c0[1]}</div>}
+          </div>
+        </div>
+      </div>
+
       {game.done ? (
-        <div className="card" style={{textAlign:'center', border:'2px solid #639922'}}>
+        <div className="card" style={{textAlign:'center', border:'2px solid var(--accent)'}}>
           <p style={{fontSize:18, fontWeight:'bold'}}>🎉 {pData[game.winner].name} 勝利</p>
-          <button className="btn btn-primary" style={{marginTop:10}} onClick={()=>onResult(game.winner, game.history)}>結果を送信</button>
+          <button className="btn btn-primary" style={{marginTop:10, width:'100%'}} onClick={()=>onResult(game.winner, game.history)}>結果を送信して終了</button>
         </div>
       ) : (
-        <div style={{display:'flex', flexDirection:'column', gap:20}}>
-          <ScoreInput name={pData[game.order[0]].name} score={game.scores[game.leg-1][game.order[0]]} c0={game.c0[game.order[0]]} isActive={game.activeIdx === game.order[0]} onScore={v=>setConfirm({who:game.order[0], val:v})}/>
-          <div style={{height:1, background:'#ccc'}}></div>
-          <ScoreInput name={pData[game.order[1]].name} score={game.scores[game.leg-1][game.order[1]]} c0={game.c0[game.order[1]]} isActive={game.activeIdx === game.order[1]} onScore={v=>setConfirm({who:game.order[1], val:v})}/>
+        <div style={{textAlign:'center'}}>
+          <ScorePanel onScore={(v) => setConfirm({who: game.activeIdx, val: v})} disabled={game.choicePending} />
         </div>
       )}
-      <button className="btn btn-sm" onClick={onCancel}>中断</button>
+      <button className="btn btn-sm" style={{marginTop:'10px', border:'none', color:'var(--text-sub)'}} onClick={onCancel}>試合を中断</button>
     </div>
   );
 }
