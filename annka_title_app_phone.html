@@ -172,9 +172,10 @@ function ScorePanel({ onScore, disabled }) {
 function GameView({ match, players, onResult, onCancel }) {
   const pData = [players[match.p1], players[match.p2]];
   const [game, setGame] = useState({
-    leg: 1, scores: [[0,0]], c0: [0,0], legWins: [0,0], history: [], done: false, winner: null,
-    order: [0, 1], activeIdx: 0, choicePending: false
-  });
+  leg: 1, scores: [[0,0]], c0: [0,0], legWins: [0,0], 
+  history: [], logs: [], // ← ここに1投ごとの全ログを溜める
+  done: false, winner: null, order: [0, 1], activeIdx: 0, choicePending: false
+});
   const [prevGame, setPrevGame] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
@@ -183,6 +184,10 @@ function GameView({ match, players, onResult, onCancel }) {
     setConfirm(null);
     setPrevGame(game);
     setGame(prev => {
+      // 1. ログの作成
+      const newLog = { who, val, leg: prev.leg, time: Date.now() };
+      const nLogs = [...prev.logs, newLog];
+      
       const sc = prev.scores.map(r=>[...r]);
       const c0 = [...prev.c0];
       const lw = [...prev.legWins];
@@ -194,21 +199,30 @@ function GameView({ match, players, onResult, onCancel }) {
 
       if (wonIdx !== null) {
         const nLw = [...lw]; nLw[wonIdx]++;
-        const nHist = [...prev.history, { leg: prev.leg, winner: wonIdx, sc: sc[prev.leg-1] }];
-        if (nLw[wonIdx] >= 2) return { ...prev, done: true, winner: wonIdx, history: nHist, scores: sc };
+        const currentLegLogs = nLogs.filter(l => l.leg === prev.leg);
+        const nHist = [...prev.history, { leg: prev.leg, winner: wonIdx, sc: sc[prev.leg-1], details: currentLegLogs }];
+        
+        // 試合終了時
+        if (nLw[wonIdx] >= 2) return { ...prev, done: true, winner: wonIdx, history: nHist, scores: sc, logs: nLogs };
+        
+        // 次のレッグへの遷移
         const nLeg = prev.leg + 1;
         const nSc = [...sc, [0,0]];
-        if (nLeg === 2) return { ...prev, leg: 2, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: [1, 0], activeIdx: 1 };
+        if (nLeg === 2) return { ...prev, leg: 2, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: [1, 0], activeIdx: 1, logs: nLogs };
         if (nLeg === 3) {
           const t1 = sc[0][0] + sc[1][0], t2 = sc[0][1] + sc[1][1];
-          if (t1 !== t2) return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: t1>t2?[0,1]:[1,0], activeIdx: t1>t2?0:1 };
-          return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, choicePending: true };
+          const nextOrder = t1 > t2 ? [0, 1] : [1, 0];
+          if (t1 !== t2) return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: nextOrder, activeIdx: nextOrder[0], logs: nLogs };
+          return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, choicePending: true, logs: nLogs };
         }
       }
-      return { ...prev, scores: sc, c0, activeIdx: prev.activeIdx === prev.order[0] ? prev.order[1] : prev.order[0] };
+
+      // 通常の投擲交代：ここを修正
+      // 先攻(order[0])なら次は後攻(order[1])へ、逆も然り
+      const nextIdx = prev.activeIdx === prev.order[0] ? prev.order[1] : prev.order[0];
+      return { ...prev, scores: sc, c0, logs: nLogs, activeIdx: nextIdx };
     });
   };
-
   const currentScores = game.scores[game.leg - 1];
 
   return (
@@ -307,25 +321,35 @@ function App() {
     });
   };
 
-  const recordResult = (winIdx, history) => {
-    if(new Date() > DEADLINE) return alert("期限切れ");
-    const m = activeMatch;
-    const winId = winIdx === 0 ? m.p1 : m.p2;
-    const loseId = winIdx === 0 ? m.p2 : m.p1;
-    const data = { p1:m.p1, p2:m.p2, result:winId, history, playedAt: m.startTime };
+  const recordResult = (winIdx, history, logs) => { 
+  if(new Date() > DEADLINE) return alert("期限切れ");
+  const m = activeMatch;
+  const winId = winIdx === 0 ? m.p1 : m.p2;
+  const loseId = winIdx === 0 ? m.p2 : m.p1;
 
-    if(m.league) {
-      sync(players, matches, [...leagueMatches, data]);
-    } else {
-      const wr = players[winId].rate, lr = players[loseId].rate;
-      const nextPlayers = { ...players, 
-        [winId]: { ...players[winId], rate: wr + calcWinGain(wr, lr) },
-        [loseId]: { ...players[loseId], rate: Math.max(0, lr - calcLoseLoss(lr, wr)) }
-      };
-      sync(nextPlayers, [...matches, data], leagueMatches);
-    }
-    setActiveMatch(null); setTab(m.league ? 'league' : 'rate');
+  // 1投ごとのログを含めて保存用データを作成
+  const data = { 
+    p1: m.p1, 
+    p2: m.p2, 
+    result: winId, 
+    history, 
+    logs: logs || [], // 確実に配列として保存
+    playedAt: m.startTime 
   };
+
+  if(m.league) {
+    sync(players, matches, [...leagueMatches, data]);
+  } else {
+    const wr = players[winId].rate, lr = players[loseId].rate;
+    const nextPlayers = { ...players, 
+      [winId]: { ...players[winId], rate: wr + calcWinGain(wr, lr) },
+      [loseId]: { ...players[loseId], rate: Math.max(0, lr - calcLoseLoss(lr, wr)) }
+    };
+    sync(nextPlayers, [...matches, data], leagueMatches);
+  }
+  setActiveMatch(null); 
+  setTab(m.league ? 'league' : 'rate');
+};
 
   const exportCSV = () => {
     let csv = "\uFEFF日時,勝者,敗者\n";
@@ -351,7 +375,13 @@ function App() {
       </div>
 
       {tab === 'game' ? (
-        <GameView match={activeMatch} players={players} onResult={recordResult} onCancel={()=>setTab('rate')}/>
+        // App内のGameView呼び出し箇所
+        <GameView 
+          match={activeMatch} 
+          players={players} 
+          onResult={(winIdx, history) => recordResult(winIdx, history, activeMatch.logs)} // ※
+          onCancel={() => setTab('rate')}
+        />
       ) : (
         <>
           <div className="tab-bar">
