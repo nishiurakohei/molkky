@@ -324,6 +324,23 @@ function App() {
     });
   };
 
+  const handleReset = () => {
+    if (!window.confirm("【警告】全ての試合結果とレートをリセットします。よろしいですか？")) return;
+    if (prompt("確認のため、管理者パスワードを入力してください") !== ADMIN_PASSWORD) {
+      return alert("パスワードが違います");
+    }
+
+    // プレイヤーのレートを初期値に戻した新しいオブジェクトを作成
+    const resetPlayers = {};
+    Object.keys(players).forEach(id => {
+      resetPlayers[id] = { ...players[id], rate: INITIAL_RATE };
+    });
+
+    // Firebaseを更新（試合履歴とリーグ戦を空の配列にする）
+    sync(resetPlayers, [], [], 'rate');
+    alert("全てのデータをリセットしました。");
+  };
+
   const recordResult = (winIdx, history, logs) => { 
   if(new Date() > DEADLINE) return alert("期限切れ");
   const m = activeMatch;
@@ -510,6 +527,10 @@ function App() {
                 const nm = prompt("名前:");
                 if(nm) sync({...players, ['p'+Date.now()]: {name:nm, rate:INITIAL_RATE}}, matches, leagueMatches);
               }}>+ 選手追加</button>}
+              {/* 🚀 リセットボタンをここに追加 */}
+              <button className="btn btn-sm" style={{backgroundColor: '#ff4d4d', color: 'white', border: 'none', marginTop: 10}} onClick={handleReset}>
+                    🔥 大会データを全リセット
+              </button>
             </div>
           )}
         </>
