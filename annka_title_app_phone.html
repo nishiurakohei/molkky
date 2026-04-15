@@ -374,20 +374,56 @@ function App() {
             </div>
           )}
           {tab === 'league' && (
-            <div className="card" style={{overflowX:'auto'}}>
-              <table style={{minWidth:400, textAlign:'center'}}>
-                <thead><tr><th style={{width:60}}></th>{Object.keys(players).map(id=><th key={id}>{players[id].name.slice(0,3)}</th>)}</tr></thead>
-                <tbody>{Object.keys(players).map(p1=>(
-                  <tr key={p1}><td>{players[p1].name.slice(0,3)}</td>{Object.keys(players).map(p2=>{
-                    if(p1===p2) return <td key={p2} style={{background:'#eee'}}></td>;
-                    const m = leagueMatches.find(x=>(x.p1===p1&&x.p2===p2)||(x.p1===p2&&x.p2===p1));
-                    if(!m) return <td key={p2}><button className="btn btn-sm" onClick={()=>{setActiveMatch({p1,p2,league:true,startTime:Date.now()});setTab('game')}}>▶</button></td>;
-                    return <td key={p2}><span className={`badge ${m.result===p1?'badge-win':'badge-lose'}`}>{m.result===p1?'勝':'負'}</span></td>;
-                  })}</tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
+  <div className="card" style={{overflowX:'auto'}}>
+    <div style={{marginBottom:10, fontSize:14, color:'var(--accent)', fontWeight:'bold'}}>
+      🏆 レート上位8名による挑戦者決定フェイズ
+    </div>
+    <table style={{minWidth:400, textAlign:'center'}}>
+      <thead>
+        <tr>
+          <th style={{width:60}}></th>
+          {/* 修正：レート順にソートして上位8名のみを抽出 */}
+          {Object.entries(players)
+            .sort((a, b) => b[1].rate - a[1].rate)
+            .slice(0, 8)
+            .map(([id, p]) => <th key={id}>{p.name.slice(0, 3)}</th>)
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {Object.entries(players)
+          .sort((a, b) => b[1].rate - a[1].rate)
+          .slice(0, 8)
+          .map(([p1, p1Data]) => (
+            <tr key={p1}>
+              <td style={{fontWeight:'bold'}}>{p1Data.name.slice(0, 3)}</td>
+              {Object.entries(players)
+                .sort((a, b) => b[1].rate - a[1].rate)
+                .slice(0, 8)
+                .map(([p2, p2Data]) => {
+                  if (p1 === p2) return <td key={p2} style={{background: 'var(--bg-page)'}}></td>;
+                  const m = leagueMatches.find(x => (x.p1 === p1 && x.p2 === p2) || (x.p1 === p2 && x.p2 === p1));
+                  if (!m) return (
+                    <td key={p2}>
+                      <button className="btn btn-sm" onClick={() => { setActiveMatch({ p1, p2, league: true, startTime: Date.now() }); setTab('game') }}>
+                        ▶
+                      </button>
+                    </td>
+                  );
+                  return (
+                    <td key={p2}>
+                      <span style={{color: m.result === p1 ? 'var(--accent)' : '#E24B4A', fontWeight: 'bold'}}>
+                        {m.result === p1 ? '○' : '●'}
+                      </span>
+                    </td>
+                  );
+                })}
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  </div>
+)}
           {tab === 'players' && (
             <div className="card">
               {Object.entries(players).map(([id, p])=>(
