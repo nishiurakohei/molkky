@@ -34,7 +34,8 @@
 }
 body { font-family: var(--font-sans); background: var(--color-background-tertiary); color: var(--color-text-primary); min-height: 100vh; }
 .btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.15s; }
-.btn:hover { background: var(--color-background-secondary); }
+.btn:hover:not(:disabled) { background: var(--color-background-secondary); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-primary { background: var(--color-text-primary); color: var(--color-background-primary); border-color: transparent; }
 .btn-danger { border-color: #E24B4A; color: #E24B4A; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
@@ -42,7 +43,7 @@ body { font-family: var(--font-sans); background: var(--color-background-tertiar
 .tab-bar { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.5rem; gap: 4px; }
 .tab { padding: 8px 14px; border: none; background: none; color: var(--color-text-secondary); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
-.score-btn { width: 60px; height: 60px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); font-size: 20px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-primary); }
+.score-btn { width: 54px; height: 54px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); font-size: 18px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-primary); }
 .score-btn.zero { border-color: #E24B4A; color: #E24B4A; }
 .big-score { font-size: 64px; font-weight: 500; text-align: center; line-height: 1; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; }
@@ -52,8 +53,10 @@ input[type=text], select { padding: 8px 12px; border-radius: var(--border-radius
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 8px 6px; text-align: left; border-bottom: 0.5px solid var(--color-border-tertiary); }
 .section-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
-.modal { background: var(--color-background-primary); border-radius: var(--border-radius-lg); padding: 1.5rem; width: 100%; max-width: 420px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; backdrop-filter: blur(2px); }
+.modal { background: var(--color-background-primary); border-radius: var(--border-radius-lg); padding: 1.5rem; width: 100%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.turn-indicator { padding: 4px 12px; border-radius: 99px; font-size: 12px; background: #eee; color: #666; font-weight: bold; }
+.turn-active { background: #639922; color: white; }
 </style>
 </head>
 <body>
@@ -61,37 +64,31 @@ th, td { padding: 8px 6px; text-align: left; border-bottom: 0.5px solid var(--co
 <script type="text/babel">
 const { useState } = React;
 
-// --- 設定定数 ---
 const INITIAL_RATE = 1500;
-const ADMIN_PASSWORD = "kyoto"; // 管理者パスワード
-const DEADLINE = new Date('2026-04-20T23:59:59'); // 入力期限
+const ADMIN_PASSWORD = "kyoto"; 
+const DEADLINE = new Date('2026-04-20T23:59:59');
 
-// --- 計算ロジック ---
-function calcWinGain(myRate, oppRate) {
-  return Math.round(24 + (oppRate - myRate) * 0.06);
-}
-function calcLoseLoss(myRate, oppRate) {
-  return Math.round(20 + (myRate - oppRate) * 0.05);
-}
-function applyScore(current, add) {
-  const next = current + add;
-  if (next === 50) return { score: 50, won: true };
-  if (next > 50) return { score: 25, won: false };
-  return { score: next, won: false };
+// ロジック
+function calcWinGain(myR, oppR) { return Math.round(24 + (oppR - myR) * 0.06); }
+function calcLoseLoss(myR, oppR) { return Math.round(20 + (myR - oppR) * 0.05); }
+function applyScore(cur, add) {
+  const n = cur + add;
+  if (n === 50) return { score: 50, won: true };
+  return n > 50 ? { score: 25, won: false } : { score: n, won: false };
 }
 
 const SCORE_OPTS = [0,1,2,3,4,5,6,7,8,9,10,11,12];
 
-// --- 部品コンポーネント ---
-function ScoreInput({ player, score, consec0, onScore }) {
+function ScoreInput({ name, score, c0, isActive, onScore }) {
   return (
-    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
-      <div style={{fontSize:14, fontWeight:500}}>{player}</div>
+    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10, opacity: isActive ? 1 : 0.4}}>
+      <div className={`turn-indicator ${isActive ? 'turn-active' : ''}`}>{isActive ? '投擲中' : '待機'}</div>
+      <div style={{fontSize:14, fontWeight:600}}>{name}</div>
       <div className="big-score" style={{color: score>=40 ? '#639922' : undefined}}>{score}</div>
-      {consec0 > 0 && <div style={{fontSize:12, color:'#E24B4A'}}>⚠ 連続0: {consec0}回</div>}
-      <div style={{display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, width:'100%'}}>
+      {c0 > 0 && <div style={{fontSize:11, color:'#E24B4A'}}>⚠️ ミス{c0}回</div>}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, width:'100%'}}>
         {SCORE_OPTS.map(v => (
-          <button key={v} className={`score-btn${v===0?' zero':''}`} onClick={()=>onScore(v)}>{v}</button>
+          <button key={v} disabled={!isActive} className={`score-btn${v===0?' zero':''}`} onClick={()=>onScore(v)}>{v}</button>
         ))}
       </div>
     </div>
@@ -99,69 +96,146 @@ function ScoreInput({ player, score, consec0, onScore }) {
 }
 
 function GameView({ match, players, onResult, onCancel }) {
-  const p1 = players[match.p1];
-  const p2 = players[match.p2];
-  const [game, setGame] = useState({ leg: 1, scores: [[0,0],[0,0]], consec0: [0,0], history: [], legWins: [0,0], done: false, winner: null });
+  const pData = [players[match.p1], players[match.p2]];
+  
+  // order[0] が 画面左(先攻), order[1] が 画面右(後攻) のインデックス
+  const [game, setGame] = useState({
+    leg: 1,
+    scores: [[0,0]], // [ [p1Score, p2Score], ... ]
+    c0: [0,0],
+    legWins: [0,0],
+    history: [],
+    done: false,
+    winner: null,
+    order: [0, 1], // レッグ内の順序 [左側プレイヤーidx, 右側プレイヤーidx]
+    activeIdx: 0,  // 現在投げているプレイヤーのインデックス(0 or 1)
+    choicePending: false // 3レッグ目の先攻選択待ち
+  });
+  
+  const [prevGame, setPrevGame] = useState(null);
   const [confirm, setConfirm] = useState(null);
+
+  // 3レッグ目の先攻を手動決定
+  const setThirdLegOrder = (leftPlayerIdx) => {
+    const rightPlayerIdx = leftPlayerIdx === 0 ? 1 : 0;
+    setGame(prev => ({
+      ...prev,
+      order: [leftPlayerIdx, rightPlayerIdx],
+      activeIdx: leftPlayerIdx,
+      choicePending: false
+    }));
+  };
 
   const confirmScore = () => {
     const { who, val } = confirm;
     setConfirm(null);
+    setPrevGame(game);
+
     setGame(prev => {
       const sc = prev.scores.map(r=>[...r]);
-      const c0 = [...prev.consec0];
+      const c0 = [...prev.c0];
       const lw = [...prev.legWins];
+      
       const res = applyScore(sc[prev.leg-1][who], val);
       sc[prev.leg-1][who] = res.score;
       c0[who] = (val === 0) ? c0[who] + 1 : 0;
       
       const isDisq = c0[who] >= 3;
-      const wonLeg = isDisq ? (who === 0 ? 1 : 0) : (res.won ? who : null);
+      const wonLegIdx = isDisq ? (who === 0 ? 1 : 0) : (res.won ? who : null);
 
-      if (wonLeg !== null) {
-        const newLw = [...lw]; newLw[wonLeg]++;
-        const newHist = [...prev.history, { leg: prev.leg, winner: wonLeg, sc: sc[prev.leg-1] }];
-        if (newLw[wonLeg] >= 2) return { ...prev, done: true, winner: wonLeg, history: newHist, scores: sc };
-        const nextSc = [...sc]; if(nextSc.length <= prev.leg) nextSc.push([0,0]);
-        return { ...prev, leg: prev.leg + 1, scores: nextSc, consec0: [0,0], history: newHist, legWins: newLw };
+      if (wonLegIdx !== null) {
+        const newLw = [...lw]; newLw[wonLegIdx]++;
+        const newHist = [...prev.history, { leg: prev.leg, winner: wonLegIdx, sc: sc[prev.leg-1] }];
+        
+        if (newLw[wonLegIdx] >= 2) return { ...prev, done: true, winner: wonLegIdx, history: newHist, scores: sc };
+        
+        // 次のレッグ準備
+        const nextLeg = prev.leg + 1;
+        const nextSc = [...sc, [0,0]];
+        
+        if (nextLeg === 2) {
+            // 2本目は先攻・後攻入れ替え
+            return { ...prev, leg: 2, scores: nextSc, c0:[0,0], history: newHist, legWins: newLw, order: [1, 0], activeIdx: 1 };
+        } else if (nextLeg === 3) {
+            // 3本目の先攻決定
+            const totalP1 = sc[0][0] + sc[1][0];
+            const totalP2 = sc[0][1] + sc[1][1];
+            if (totalP1 > totalP2) return { ...prev, leg: 3, scores: nextSc, c0:[0,0], history: newHist, legWins: newLw, order: [0, 1], activeIdx: 0 };
+            if (totalP2 > totalP1) return { ...prev, leg: 3, scores: nextSc, c0:[0,0], history: newHist, legWins: newLw, order: [1, 0], activeIdx: 1 };
+            return { ...prev, leg: 3, scores: nextSc, c0:[0,0], history: newHist, legWins: newLw, choicePending: true };
+        }
       }
-      return { ...prev, scores: sc, consec0: c0 };
+      // ターン交代
+      return { ...prev, scores: sc, c0, activeIdx: prev.activeIdx === prev.order[0] ? prev.order[1] : prev.order[0] };
     });
   };
 
   return (
     <div style={{display:'flex', flexDirection:'column', gap:16}}>
+      {game.choicePending && (
+        <div className="modal-overlay">
+          <div className="modal" style={{textAlign:'center'}}>
+            <p style={{marginBottom:15, fontWeight:'bold'}}>合計得点が同点です。<br/>3レッグ目の先攻を選んでください。</p>
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>setThirdLegOrder(0)}>{pData[0].name}</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>setThirdLegOrder(1)}>{pData[1].name}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirm && (
         <div className="modal-overlay">
           <div className="modal" style={{textAlign:'center'}}>
-            <p>{confirm.who===0?p1.name:p2.name} に <strong>{confirm.val}</strong> 点を入力？</p>
-            <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:12}}>
+            <p>{pData[confirm.who].name} に <strong>{confirm.val}</strong> 点を入力？</p>
+            <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:15}}>
               <button className="btn btn-primary" onClick={confirmScore}>確定</button>
               <button className="btn" onClick={()=>setConfirm(null)}>中止</button>
             </div>
           </div>
         </div>
       )}
-      <div style={{display:'flex', justifyContent:'space-between', fontSize:13}}>
-        <span>第{game.leg}本目</span>
-        <div>{game.legWins[0]} - {game.legWins[1]}</div>
+
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <span style={{fontSize:13, fontWeight:'bold', background:'#333', color:'#fff', padding:'2px 8px', borderRadius:4}}>第{game.leg}本目</span>
+        <div style={{display:'flex', gap:8}}>
+          <div style={{fontSize:14, fontWeight:'bold'}}>{pData[0].name[0]}:{game.legWins[0]} - {pData[1].name[0]}:{game.legWins[1]}</div>
+          <button className="btn btn-sm" onClick={()=> {setGame(prevGame); setPrevGame(null);}} disabled={!prevGame || game.done}>↩ 戻す</button>
+        </div>
       </div>
+
       {game.done ? (
-        <div className="card" style={{textAlign:'center'}}>
-          <p>🎉 {game.winner===0?p1.name:p2.name} の勝利</p>
-          <button className="btn btn-primary" style={{marginTop:12}} onClick={()=>onResult(game.winner, game.history)}>結果を記録</button>
+        <div className="card" style={{textAlign:'center', border:'2px solid #639922'}}>
+          <p style={{fontSize:18, fontWeight:'bold'}}>🎉 {pData[game.winner].name} の勝利</p>
+          <div style={{marginTop:12, display:'flex', gap:8, justifyContent:'center'}}>
+            <button className="btn btn-primary" onClick={()=>onResult(game.winner, game.history)}>結果を送信</button>
+          </div>
         </div>
       ) : (
-        <div style={{display:'flex', gap:20}}>
-          <ScoreInput player={p1.name} score={game.scores[game.leg-1][0]} consec0={game.consec0[0]} onScore={v=>setConfirm({who:0,val:v})}/>
-          <ScoreInput player={p2.name} score={game.scores[game.leg-1][1]} consec0={game.consec0[1]} onScore={v=>setConfirm({who:1,val:v})}/>
+        <div style={{display:'flex', gap:12}}>
+          <ScoreInput 
+            name={pData[game.order[0]].name} 
+            score={game.scores[game.leg-1][game.order[0]]} 
+            c0={game.c0[game.order[0]]} 
+            isActive={game.activeIdx === game.order[0]} 
+            onScore={v=>setConfirm({who:game.order[0], val:v})}
+          />
+          <div style={{width:1, background:'#ddd'}}></div>
+          <ScoreInput 
+            name={pData[game.order[1]].name} 
+            score={game.scores[game.leg-1][game.order[1]]} 
+            c0={game.c0[game.order[1]]} 
+            isActive={game.activeIdx === game.order[1]} 
+            onScore={v=>setConfirm({who:game.order[1], val:v})}
+          />
         </div>
       )}
-      {!game.done && <button className="btn btn-sm" onClick={onCancel}>キャンセル</button>}
+      {!game.done && <button className="btn btn-sm" style={{alignSelf:'center'}} onClick={onCancel}>中断</button>}
     </div>
   );
 }
 
+// --- App, Tabs etc (変更なし) ---
 function RateTab({ players, matches }) {
   const ranked = Object.entries(players).map(([id,p])=>({id, ...p})).sort((a,b)=>b.rate-a.rate);
   return (
@@ -169,10 +243,7 @@ function RateTab({ players, matches }) {
       <thead><tr><th>#</th><th>選手</th><th>レート</th><th>試合数</th></tr></thead>
       <tbody>
         {ranked.map((p,i)=>(
-          <tr key={p.id}>
-            <td>{i+1}</td><td>{p.name}</td><td>{p.rate}</td>
-            <td>{matches.filter(m=>m.p1===p.id||m.p2===p.id).length}</td>
-          </tr>
+          <tr key={p.id}><td>{i+1}</td><td>{p.name}</td><td>{p.rate}</td><td>{matches.filter(m=>m.p1===p.id||m.p2===p.id).length}</td></tr>
         ))}
       </tbody>
     </table>
@@ -184,9 +255,7 @@ function LeagueTab({ players, leagueMatches, onStartMatch, isAdmin }) {
   return (
     <div className="card" style={{overflowX:'auto'}}>
       <table style={{tableLayout:'fixed', minWidth:400}}>
-        <thead>
-          <tr><th style={{width:80}}></th>{ids.map(id=><th key={id} style={{textAlign:'center'}}>{players[id].name.slice(0,3)}</th>)}</tr>
-        </thead>
+        <thead><tr><th style={{width:80}}></th>{ids.map(id=><th key={id} style={{textAlign:'center'}}>{players[id].name.slice(0,3)}</th>)}</tr></thead>
         <tbody>
           {ids.map(p1=>(
             <tr key={p1}>
@@ -205,7 +274,6 @@ function LeagueTab({ players, leagueMatches, onStartMatch, isAdmin }) {
   );
 }
 
-// --- メインアプリケーション ---
 function App() {
   const [tab, setTab] = useState('rate');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -232,16 +300,15 @@ function App() {
     setTab('game');
   };
 
-  const recordResult = (winnerIdx, history) => {
-    if(new Date() > DEADLINE) return alert("期限切れです");
+  const recordResult = (winIdx, history) => {
+    if(new Date() > DEADLINE) return alert("期限切れ");
     const m = activeMatch;
-    const winId = winnerIdx === 0 ? m.p1 : m.p2;
-    const loseId = winnerIdx === 0 ? m.p2 : m.p1;
+    const winId = winIdx === 0 ? m.p1 : m.p2;
+    const loseId = winIdx === 0 ? m.p2 : m.p1;
     const data = { p1:m.p1, p2:m.p2, result:winId, history, playedAt: m.startTime };
 
-    if(m.league) {
-      setLeagueMatches(prev => [...prev, data]);
-    } else {
+    if(m.league) setLeagueMatches(prev => [...prev, data]);
+    else {
       setMatches(prev => [...prev, data]);
       setPlayers(prev => {
         const wr = prev[winId].rate, lr = prev[loseId].rate;
@@ -251,28 +318,27 @@ function App() {
         };
       });
     }
-    setActiveMatch(null);
-    setTab(m.league ? 'league' : 'rate');
+    setActiveMatch(null); setTab(m.league ? 'league' : 'rate');
   };
 
   const exportCSV = () => {
-    let csv = "\uFEFF対戦時刻,勝者,敗者\n";
-    matches.concat(leagueMatches).forEach(m => {
+    let csv = "\uFEFF日時,勝者,敗者\n";
+    [...matches, ...leagueMatches].forEach(m => {
       csv += `${new Date(m.playedAt).toLocaleString()},${players[m.result].name},${players[m.p1===m.result?m.p2:m.p1].name}\n`;
     });
     const url = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-    const a = document.createElement('a'); a.href=url; a.download='ankka_results.csv'; a.click();
+    const a = document.createElement('a'); a.href=url; a.download='ankka.csv'; a.click();
   };
 
   return (
     <div style={{maxWidth:720, margin:'0 auto', padding:'1rem'}}>
-      <div style={{textAlign:'right', fontSize:10, color:'#E24B4A'}}>期限: {DEADLINE.toLocaleString()}</div>
-      <div style={{display:'flex', alignItems:'center', marginBottom:20}}>
-        <div><h2>Ankkaタイトル戦</h2></div>
+      <div style={{textAlign:'right', fontSize:10, color:'#E24B4A', marginBottom:4}}>期限: {DEADLINE.toLocaleString()}</div>
+      <div style={{display:'flex', alignItems:'center', marginBottom:15}}>
+        <h2>Ankkaタイトル戦</h2>
         <div style={{marginLeft:'auto', display:'flex', gap:8}}>
           <button className="btn btn-sm" onClick={toggleAdmin}>{isAdmin?'Logout':'Admin'}</button>
           {isAdmin && (
-            <select className="btn btn-sm" value={phase} onChange={e=>setPhase(e.target.value)}>
+            <select className="btn btn-sm" style={{width:'auto'}} value={phase} onChange={e=>setPhase(e.target.value)}>
               <option value="rate">順位戦決定</option>
               <option value="league">順位戦</option>
             </select>
@@ -281,7 +347,7 @@ function App() {
       </div>
 
       {tab === 'game' ? (
-        <GameView match={activeMatch} players={players} onResult={recordResult} onCancel={()=>setTab(activeMatch.league?'league':'rate')}/>
+        <GameView match={activeMatch} players={players} onResult={recordResult} onCancel={()=>setTab('rate')}/>
       ) : (
         <>
           <div className="tab-bar">
@@ -294,17 +360,9 @@ function App() {
             <div>
               <div style={{marginBottom:10, display:'flex', gap:8}}>
                 <button className="btn btn-sm" onClick={()=>setShowNewMatch(true)}>+ 対戦記録</button>
-                <button className="btn btn-sm" onClick={exportCSV}>CSV出力</button>
+                <button className="btn btn-sm" onClick={exportCSV}>CSV</button>
               </div>
               <div className="card"><RateTab players={players} matches={matches}/></div>
-              <div className="card" style={{marginTop:16}}>
-                <div className="section-label">直近の履歴</div>
-                {matches.slice().reverse().map((m,i)=>(
-                  <div key={i} style={{fontSize:12, padding:'4px 0', borderBottom:'1px solid #eee'}}>
-                    {new Date(m.playedAt).toLocaleTimeString()} : {players[m.result].name} 勝
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
@@ -314,7 +372,7 @@ function App() {
             <div className="card">
               {Object.entries(players).map(([id, p])=>(
                 <div key={id} style={{display:'flex', justifyContent:'space-between', padding:'8px 0'}}>
-                  <span>{p.name} (Rate: {p.rate})</span>
+                  <span>{p.name} ({p.rate})</span>
                   {isAdmin && <button className="btn btn-sm btn-danger" onClick={()=>{
                     const n={...players}; delete n[id]; setPlayers(n);
                   }}>削除</button>}
@@ -332,11 +390,12 @@ function App() {
       {showNewMatch && (
         <div className="modal-overlay">
           <div className="modal">
+            <p className="section-label">対戦カード</p>
             <select onChange={e=>setNewMatchP({...newMatchP, p1:e.target.value})}><option>選手A</option>{Object.keys(players).map(id=><option key={id} value={id}>{players[id].name}</option>)}</select>
-            <select onChange={e=>setNewMatchP({...newMatchP, p2:e.target.value})} style={{marginTop:10}}><option>選手B</option>{Object.keys(players).map(id=><option key={id} value={id}>{players[id].name}</option>)}</select>
+            <select onChange={e=>setNewMatchP({...newMatchP, p2:e.target.value})} style={{marginTop:10}}><option>選手B</option>{Object.keys(players).filter(id=>id!==newMatchP.p1).map(id=><option key={id} value={id}>{players[id].name}</option>)}</select>
             <div style={{marginTop:15, display:'flex', gap:8}}>
-              <button className="btn btn-primary" onClick={()=>{startMatch(newMatchP.p1, newMatchP.p2); setShowNewMatch(false);}}>開始</button>
-              <button className="btn" onClick={()=>setShowNewMatch(false)}>キャンセル</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>{if(newMatchP.p1 && newMatchP.p2) {startMatch(newMatchP.p1, newMatchP.p2); setShowNewMatch(false);}}}>開始</button>
+              <button className="btn" style={{flex:1}} onClick={()=>setShowNewMatch(false)}>キャンセル</button>
             </div>
           </div>
         </div>
@@ -345,7 +404,8 @@ function App() {
   );
 }
 
-ReactDOM.render(<App/>, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
 </script>
 </body>
 </html>
