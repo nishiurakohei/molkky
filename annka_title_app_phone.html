@@ -2,65 +2,69 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Ankkaタイトル戦</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ankkaタイトル戦 - Firebase版</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg0: #fff; --bg1: #f5f5f3; --bg2: #ebebea;
-  --txt: #1a1a1a; --txt2: #666;
-  --bdr: rgba(0,0,0,0.13); --bdr2: rgba(0,0,0,0.22);
-  --rad: 10px; --green: #4e8a0e; --red: #E24B4A;
-  --font: system-ui,-apple-system,sans-serif;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666;
+  --color-background-primary: #fff;
+  --color-background-secondary: #f5f5f3;
+  --color-border-tertiary: rgba(0,0,0,0.12);
+  --color-border-secondary: rgba(0,0,0,0.22);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg0:#1c1c1a; --bg1:#2a2a28; --bg2:#333330;
-    --txt:#f0f0ee; --txt2:#999;
-    --bdr:rgba(255,255,255,0.1); --bdr2:rgba(255,255,255,0.2);
+    --color-text-primary: #f0f0ee;
+    --color-text-secondary: #999;
+    --color-background-primary: #1c1c1a;
+    --color-background-secondary: #2a2a28;
+    --color-border-tertiary: rgba(255,255,255,0.1);
   }
 }
-body { font-family:var(--font); background:var(--bg2); color:var(--txt); min-height:100vh; -webkit-tap-highlight-color:transparent; }
-.btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 18px; border-radius:var(--rad); border:0.5px solid var(--bdr2); background:transparent; color:var(--txt); cursor:pointer; font-size:14px; font-weight:500; transition:background .15s; }
-.btn:active:not(:disabled) { background:var(--bg1); }
-.btn:disabled { opacity:.3; cursor:not-allowed; }
-.btn-primary { background:var(--txt); color:var(--bg0); border-color:transparent; }
-.btn-danger { border-color:var(--red); color:var(--red); }
-.btn-sm { padding:6px 12px; font-size:13px; }
-.card { background:var(--bg0); border-radius:var(--rad); border:0.5px solid var(--bdr); padding:1rem 1.25rem; }
-.tab-bar { display:flex; border-bottom:0.5px solid var(--bdr); margin-bottom:1.25rem; }
-.tab { flex:1; padding:10px 0; border:none; background:none; color:var(--txt2); cursor:pointer; font-size:14px; border-bottom:2px solid transparent; margin-bottom:-1px; text-align:center; }
-.tab.active { color:var(--txt); border-bottom-color:var(--txt); font-weight:600; }
-input[type=text], select { padding:10px 12px; border-radius:var(--rad); border:0.5px solid var(--bdr2); background:var(--bg0); color:var(--txt); width:100%; font-size:15px; }
-table { width:100%; border-collapse:collapse; font-size:13px; }
-th, td { padding:9px 6px; text-align:left; border-bottom:0.5px solid var(--bdr); }
-.badge { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; }
-.badge-win { background:#EAF3DE; color:#3B6D11; }
-.badge-lose { background:#FCEBEB; color:#A32D2D; }
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; backdrop-filter:blur(3px); }
-.modal { background:var(--bg0); border-radius:var(--rad) var(--rad) 0 0; padding:1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom)); width:100%; max-width:560px; box-shadow:0 -4px 24px rgba(0,0,0,0.25); }
-.score-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-.score-btn { height:62px; border-radius:var(--rad); border:0.5px solid var(--bdr2); background:var(--bg1); font-size:22px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--txt); transition:opacity .15s,background .1s; }
-.score-btn:active:not(:disabled) { background:var(--bg2); }
-.score-btn:disabled { opacity:.2; cursor:not-allowed; }
-.score-btn.zero { border-color:var(--red); color:var(--red); }
-.turn-pill { display:inline-flex; align-items:center; gap:5px; padding:5px 14px; border-radius:99px; font-size:13px; font-weight:600; background:var(--bg2); color:var(--txt2); }
-.turn-pill.active { background:var(--green); color:#fff; }
-.score-banner { display:flex; justify-content:space-around; align-items:center; background:var(--bg0); border-radius:var(--rad); border:0.5px solid var(--bdr); padding:12px; }
-.banner-player { text-align:center; }
-.banner-name { font-size:12px; color:var(--txt2); margin-bottom:2px; }
-.banner-val { font-size:32px; font-weight:700; line-height:1; }
-.divider { font-size:12px; color:var(--txt2); text-align:center; padding:4px 0; letter-spacing:2px; }
+body { font-family: system-ui, sans-serif; background: #ebebea; color: var(--color-text-primary); min-height: 100vh; padding: 10px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; border-radius: 8px; border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 14px; font-weight: 600; }
+.btn-primary { background: var(--color-text-primary); color: var(--color-background-primary); }
+.btn-danger { border-color: #E24B4A; color: #E24B4A; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.card { background: var(--color-background-primary); border-radius: 12px; padding: 1rem; border: 0.5px solid var(--color-border-tertiary); margin-bottom: 12px; }
+.tab-bar { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1rem; }
+.tab { flex: 1; padding: 12px; border: none; background: none; color: var(--color-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+.tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: bold; }
+.score-btn { width: 100%; height: 55px; border-radius: 8px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); font-size: 20px; font-weight: bold; color: var(--color-text-primary); }
+.score-btn.zero { border-color: #E24B4A; color: #E24B4A; }
+.big-score { font-size: 72px; font-weight: 500; text-align: center; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; backdrop-filter: blur(3px); }
+.modal { background: var(--color-background-primary); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 400px; }
+.turn-indicator { padding: 4px 12px; border-radius: 99px; font-size: 12px; background: #ddd; margin-bottom: 4px; }
+.turn-active { background: #639922; color: white; }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
 
+// --- Firebase Configuration ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBmKFnvnL1QD6Tr9eWJ2Lwzkyfxx_DkyJU",
+  authDomain: "molkky-title.firebaseapp.com",
+  projectId: "molkky-title",
+  storageBucket: "molkky-title.firebasestorage.app",
+  messagingSenderId: "129957457899",
+  appId: "1:129957457899:web:6230c127ea5cbebef073ae"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// --- Logics ---
 const INITIAL_RATE = 1500;
 const ADMIN_PASSWORD = "kyoto";
 const DEADLINE = new Date('2026-04-20T23:59:59');
@@ -69,352 +73,259 @@ function calcWinGain(myR, oppR) { return Math.round(24 + (oppR - myR) * 0.06); }
 function calcLoseLoss(myR, oppR) { return Math.round(20 + (myR - oppR) * 0.05); }
 function applyScore(cur, add) {
   const n = cur + add;
-  if (n === 50) return { score:50, won:true };
-  return n > 50 ? { score:25, won:false } : { score:n, won:false };
+  return n === 50 ? { score: 50, won: true } : (n > 50 ? { score: 25, won: false } : { score: n, won: false });
 }
-const SCORE_OPTS = [0,1,2,3,4,5,6,7,8,9,10,11,12];
 
-/* ─── ScoreInput ─── */
-function ScoreInput({ name, score, c0, isFirst, isMyTurn, onScore }) {
+// --- Components ---
+function ScoreInput({ name, score, c0, isActive, onScore }) {
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10}}>
-      <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        <div className={`turn-pill${isMyTurn?' active':''}`}>{isMyTurn?'▶ 投擲中':'⏸ 待機'}</div>
-        {isFirst && <span style={{fontSize:11,background:'#fffbe6',color:'#a07000',border:'1px solid #f0d060',borderRadius:99,padding:'2px 8px',fontWeight:700}}>先行</span>}
-      </div>
-      <div style={{fontSize:16,fontWeight:700,textAlign:'center'}}>{name}</div>
-      <div style={{fontSize:68,fontWeight:600,textAlign:'center',lineHeight:1,letterSpacing:'-2px',color:score>=40?'#639922':undefined}}>{score}</div>
-      {c0>0 && <div style={{fontSize:12,color:'#E24B4A',textAlign:'center'}}>⚠️ ミス {c0}回</div>}
-      <div className="score-grid">
-        {SCORE_OPTS.map(v=>(
-          <button key={v} className={`score-btn${v===0?' zero':''}`} disabled={!isMyTurn} onClick={()=>onScore(v)}>{v}</button>
+    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8, opacity: isActive ? 1 : 0.4}}>
+      <div className={`turn-indicator ${isActive ? 'turn-active' : ''}`}>{isActive ? '投擲中' : '待機'}</div>
+      <div style={{fontSize:16, fontWeight:'bold'}}>{name}</div>
+      <div className="big-score" style={{color: score>=40 ? '#639922' : undefined}}>{score}</div>
+      {c0 > 0 && <div style={{fontSize:12, color:'#E24B4A', fontWeight:'bold'}}>ミス: {c0}回</div>}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, width:'100%'}}>
+        {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(v => (
+          <button key={v} disabled={!isActive} className={`score-btn${v===0?' zero':''}`} onClick={()=>onScore(v)}>{v}</button>
         ))}
       </div>
     </div>
   );
 }
 
-/* ─── GameView ─── */
-// order[0]=先行playerIdx(0|1), order[1]=後攻playerIdx
-// activeSide=0→先行ターン, 1→後攻ターン
-// scores[legIdx][playerIdx]
 function GameView({ match, players, onResult, onCancel }) {
   const pData = [players[match.p1], players[match.p2]];
-
   const [game, setGame] = useState({
-    leg:1, scores:[[0,0]], c0:[0,0], legWins:[0,0],
-    history:[], done:false, winner:null,
-    order:[0,1], activeSide:0, choicePending:false
+    leg: 1, scores: [[0,0]], c0: [0,0], legWins: [0,0], history: [], done: false, winner: null,
+    order: [0, 1], activeIdx: 0, choicePending: false
   });
   const [prevGame, setPrevGame] = useState(null);
-  const [confirm, setConfirm] = useState(null); // {sideIdx, val}
-
-  const setThirdLegOrder = (chosenPlayerIdx) => {
-    setGame(prev=>({...prev, order:[chosenPlayerIdx, chosenPlayerIdx===0?1:0], activeSide:0, choicePending:false}));
-  };
+  const [confirm, setConfirm] = useState(null);
 
   const confirmScore = () => {
-    const {sideIdx, val} = confirm;
-    setConfirm(null); setPrevGame(game);
-    setGame(prev=>{
-      const playerIdx = prev.order[sideIdx];
+    const { who, val } = confirm;
+    setConfirm(null);
+    setPrevGame(game);
+    setGame(prev => {
       const sc = prev.scores.map(r=>[...r]);
       const c0 = [...prev.c0];
       const lw = [...prev.legWins];
+      const res = applyScore(sc[prev.leg-1][who], val);
+      sc[prev.leg-1][who] = res.score;
+      c0[who] = (val === 0) ? c0[who] + 1 : 0;
+      const isDisq = c0[who] >= 3;
+      const wonIdx = isDisq ? (who === 0 ? 1 : 0) : (res.won ? who : null);
 
-      const res = applyScore(sc[prev.leg-1][playerIdx], val);
-      sc[prev.leg-1][playerIdx] = res.score;
-      c0[playerIdx] = val===0 ? c0[playerIdx]+1 : 0;
-
-      const isDisq = c0[playerIdx]>=3;
-      const wonPlayerIdx = isDisq ? (playerIdx===0?1:0) : (res.won?playerIdx:null);
-
-      if (wonPlayerIdx !== null) {
-        const newLw=[...lw]; newLw[wonPlayerIdx]++;
-        const newHist=[...prev.history,{leg:prev.leg,winner:wonPlayerIdx,sc:sc[prev.leg-1]}];
-        if (newLw[wonPlayerIdx]>=2) return {...prev,done:true,winner:wonPlayerIdx,history:newHist,scores:sc,c0};
-        const nextLeg=prev.leg+1;
-        const nextSc=[...sc,[0,0]];
-        if (nextLeg===2) return {...prev,leg:2,scores:nextSc,c0:[0,0],history:newHist,legWins:newLw,order:[prev.order[1],prev.order[0]],activeSide:0};
-        if (nextLeg===3) {
-          const t0=sc[0][0]+sc[1][0], t1=sc[0][1]+sc[1][1];
-          if (t0>t1) return {...prev,leg:3,scores:nextSc,c0:[0,0],history:newHist,legWins:newLw,order:[0,1],activeSide:0};
-          if (t1>t0) return {...prev,leg:3,scores:nextSc,c0:[0,0],history:newHist,legWins:newLw,order:[1,0],activeSide:0};
-          return {...prev,leg:3,scores:nextSc,c0:[0,0],history:newHist,legWins:newLw,choicePending:true};
+      if (wonIdx !== null) {
+        const nLw = [...lw]; nLw[wonIdx]++;
+        const nHist = [...prev.history, { leg: prev.leg, winner: wonIdx, sc: sc[prev.leg-1] }];
+        if (nLw[wonIdx] >= 2) return { ...prev, done: true, winner: wonIdx, history: nHist, scores: sc };
+        const nLeg = prev.leg + 1;
+        const nSc = [...sc, [0,0]];
+        if (nLeg === 2) return { ...prev, leg: 2, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: [1, 0], activeIdx: 1 };
+        if (nLeg === 3) {
+          const t1 = sc[0][0] + sc[1][0], t2 = sc[0][1] + sc[1][1];
+          if (t1 !== t2) return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: t1>t2?[0,1]:[1,0], activeIdx: t1>t2?0:1 };
+          return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, choicePending: true };
         }
       }
-      return {...prev,scores:sc,c0,activeSide:prev.activeSide===0?1:0};
+      return { ...prev, scores: sc, c0, activeIdx: prev.activeIdx === prev.order[0] ? prev.order[1] : prev.order[0] };
     });
   };
 
-  const firstIdx  = game.order[0]; // 先行playerIdx
-  const secondIdx = game.order[1]; // 後攻playerIdx
-  const legScore  = game.scores[game.leg-1];
-
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10}}>
-
-      {/* 3本目先攻選択 */}
+    <div style={{display:'flex', flexDirection:'column', gap:10}}>
       {game.choicePending && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <p style={{fontWeight:'bold',fontSize:17,marginBottom:6}}>合計得点が同点です</p>
-            <p style={{fontSize:13,color:'var(--txt2)',marginBottom:20}}>3本目の先行を選んでください</p>
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <button className="btn btn-primary" style={{width:'100%',padding:14,fontSize:16}} onClick={()=>setThirdLegOrder(0)}>{pData[0].name}</button>
-              <button className="btn btn-primary" style={{width:'100%',padding:14,fontSize:16}} onClick={()=>setThirdLegOrder(1)}>{pData[1].name}</button>
-            </div>
-          </div>
-        </div>
+        <div className="modal-overlay"><div className="modal">
+          <p style={{marginBottom:15, fontWeight:'bold', textAlign:'center'}}>3レッグ目の先攻を選択</p>
+          <div style={{display:'flex', gap:8}}>{[0,1].map(i => <button key={i} className="btn btn-primary" style={{flex:1}} onClick={()=>setGame(prev=>({...prev, order:i===0?[0,1]:[1,0], activeIdx:i, choicePending:false}))}>{pData[i].name}</button>)}</div>
+        </div></div>
       )}
-
-      {/* 得点確認 */}
       {confirm && (
-        <div className="modal-overlay">
-          <div className="modal" style={{textAlign:'center'}}>
-            <p style={{fontSize:15,marginBottom:8}}><strong>{pData[game.order[confirm.sideIdx]].name}</strong> に</p>
-            <p style={{fontSize:44,fontWeight:700,margin:'10px 0',color:confirm.val===0?'#E24B4A':'var(--txt)'}}>{confirm.val} 点</p>
-            <p style={{fontSize:13,color:'var(--txt2)',marginBottom:20}}>を入力しますか？</p>
-            <div style={{display:'flex',gap:10}}>
-              <button className="btn btn-primary" style={{flex:1,padding:14}} onClick={confirmScore}>確定</button>
-              <button className="btn" style={{flex:1,padding:14}} onClick={()=>setConfirm(null)}>中止</button>
-            </div>
+        <div className="modal-overlay"><div className="modal" style={{textAlign:'center'}}>
+          <p>{pData[confirm.who].name} に <strong>{confirm.val}</strong> 点を入力？</p>
+          <div style={{display:'flex', gap:10, justifyContent:'center', marginTop:15}}>
+            <button className="btn btn-primary" onClick={confirmScore}>確定</button>
+            <button className="btn" onClick={()=>setConfirm(null)}>中止</button>
           </div>
-        </div>
+        </div></div>
       )}
-
-      {/* ゲームヘッダー */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingBottom:10,borderBottom:'0.5px solid var(--bdr)'}}>
-        <span style={{fontSize:13,fontWeight:700,background:'#333',color:'#fff',padding:'3px 10px',borderRadius:6}}>第{game.leg}本目</span>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <span style={{fontSize:14,fontWeight:700}}>{pData[0].name[0]}:{game.legWins[0]} — {pData[1].name[0]}:{game.legWins[1]}</span>
-          <button className="btn btn-sm" disabled={!prevGame||game.done} onClick={()=>{setGame(prevGame);setPrevGame(null);}}>↩</button>
-        </div>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <span style={{fontWeight:'bold'}}>第{game.leg}本目</span>
+        <button className="btn btn-sm" onClick={()=> {setGame(prevGame); setPrevGame(null);}} disabled={!prevGame || game.done}>↩ 戻す</button>
       </div>
-
       {game.done ? (
-        <div className="card" style={{textAlign:'center',border:'2px solid #639922',padding:'2rem 1rem'}}>
-          <div style={{fontSize:52,marginBottom:8}}>🎉</div>
-          <p style={{fontSize:22,fontWeight:700,marginBottom:4}}>{pData[game.winner].name}</p>
-          <p style={{color:'var(--txt2)',marginBottom:20}}>の勝利</p>
-          <button className="btn btn-primary" style={{width:'100%',padding:14,fontSize:16}} onClick={()=>onResult(game.winner,game.history)}>結果を送信</button>
+        <div className="card" style={{textAlign:'center', border:'2px solid #639922'}}>
+          <p style={{fontSize:18, fontWeight:'bold'}}>🎉 {pData[game.winner].name} 勝利</p>
+          <button className="btn btn-primary" style={{marginTop:10}} onClick={()=>onResult(game.winner, game.history)}>結果を送信</button>
         </div>
       ) : (
-        <>
-          {/* レッグ得点バナー */}
-          <div className="score-banner">
-            <div className="banner-player">
-              <div className="banner-name">{pData[firstIdx].name} <span style={{fontSize:10,color:'#a07000'}}>先行</span></div>
-              <div className="banner-val" style={{color:legScore[firstIdx]>=40?'#639922':undefined}}>{legScore[firstIdx]}</div>
-            </div>
-            <div style={{fontSize:13,color:'var(--txt2)'}}>vs</div>
-            <div className="banner-player">
-              <div className="banner-name">{pData[secondIdx].name}</div>
-              <div className="banner-val" style={{color:legScore[secondIdx]>=40?'#639922':undefined}}>{legScore[secondIdx]}</div>
-            </div>
-          </div>
-
-          {/* 先行パネル */}
-          <div className="card">
-            <ScoreInput
-              name={pData[firstIdx].name}
-              score={legScore[firstIdx]}
-              c0={game.c0[firstIdx]}
-              isFirst={true}
-              isMyTurn={game.activeSide===0}
-              onScore={v=>setConfirm({sideIdx:0,val:v})}
-            />
-          </div>
-
-          <div className="divider">── 後攻 ──</div>
-
-          {/* 後攻パネル */}
-          <div className="card">
-            <ScoreInput
-              name={pData[secondIdx].name}
-              score={legScore[secondIdx]}
-              c0={game.c0[secondIdx]}
-              isFirst={false}
-              isMyTurn={game.activeSide===1}
-              onScore={v=>setConfirm({sideIdx:1,val:v})}
-            />
-          </div>
-
-          <button className="btn btn-sm" style={{alignSelf:'center',color:'var(--txt2)',marginTop:4}} onClick={onCancel}>試合を中断</button>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ─── RateTab ─── */
-function RateTab({ players, matches }) {
-  const ranked = Object.entries(players).map(([id,p])=>({id,...p})).sort((a,b)=>b.rate-a.rate);
-  return (
-    <table>
-      <thead><tr><th>#</th><th>選手</th><th>レート</th><th>試合数</th></tr></thead>
-      <tbody>
-        {ranked.map((p,i)=>(
-          <tr key={p.id}><td>{i+1}</td><td>{p.name}</td><td>{p.rate}</td><td>{matches.filter(m=>m.p1===p.id||m.p2===p.id).length}</td></tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/* ─── LeagueTab ─── */
-function LeagueTab({ players, leagueMatches, onStartMatch, isAdmin }) {
-  const ids = Object.keys(players);
-  return (
-    <div className="card" style={{overflowX:'auto'}}>
-      <table style={{tableLayout:'fixed',minWidth:360}}>
-        <thead><tr><th style={{width:72}}></th>{ids.map(id=><th key={id} style={{textAlign:'center'}}>{players[id].name.slice(0,3)}</th>)}</tr></thead>
-        <tbody>
-          {ids.map(p1=>(
-            <tr key={p1}>
-              <td style={{fontWeight:600}}>{players[p1].name.slice(0,3)}</td>
-              {ids.map(p2=>{
-                if(p1===p2) return <td key={p2} style={{background:'var(--bg2)'}}></td>;
-                const m=leagueMatches.find(x=>(x.p1===p1&&x.p2===p2)||(x.p1===p2&&x.p2===p1));
-                if(!m) return <td key={p2} style={{textAlign:'center'}}>{isAdmin&&<button className="btn btn-sm" onClick={()=>onStartMatch(p1,p2)}>▶</button>}</td>;
-                return <td key={p2} style={{textAlign:'center'}}><span className={`badge ${m.result===p1?'badge-win':'badge-lose'}`}>{m.result===p1?'勝':'負'}</span></td>;
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ─── App ─── */
-function App() {
-  const [tab,setTab] = useState('rate');
-  const [isAdmin,setIsAdmin] = useState(false);
-  const [players,setPlayers] = useState({
-    p1:{name:'プレイヤー1',rate:INITIAL_RATE},
-    p2:{name:'プレイヤー2',rate:INITIAL_RATE},
-    p3:{name:'プレイヤー3',rate:INITIAL_RATE},
-    p4:{name:'プレイヤー4',rate:INITIAL_RATE},
-  });
-  const [matches,setMatches] = useState([]);
-  const [leagueMatches,setLeagueMatches] = useState([]);
-  const [activeMatch,setActiveMatch] = useState(null);
-  const [phase,setPhase] = useState('rate');
-  const [showNewMatch,setShowNewMatch] = useState(false);
-  const [newMatchP,setNewMatchP] = useState({p1:'',p2:''});
-
-  const toggleAdmin = () => {
-    if(isAdmin) return setIsAdmin(false);
-    if(prompt("Password:")===ADMIN_PASSWORD) setIsAdmin(true);
-  };
-  const startMatch = (p1,p2) => { setActiveMatch({p1,p2,league:phase==='league',startTime:Date.now()}); setTab('game'); };
-  const recordResult = (winIdx,history) => {
-    if(new Date()>DEADLINE) return alert("期限切れ");
-    const m=activeMatch;
-    const winId=winIdx===0?m.p1:m.p2, loseId=winIdx===0?m.p2:m.p1;
-    const data={p1:m.p1,p2:m.p2,result:winId,history,playedAt:m.startTime};
-    if(m.league) setLeagueMatches(prev=>[...prev,data]);
-    else {
-      setMatches(prev=>[...prev,data]);
-      setPlayers(prev=>{
-        const wr=prev[winId].rate,lr=prev[loseId].rate;
-        return {...prev,[winId]:{...prev[winId],rate:wr+calcWinGain(wr,lr)},[loseId]:{...prev[loseId],rate:Math.max(0,lr-calcLoseLoss(lr,wr))}};
-      });
-    }
-    setActiveMatch(null); setTab(m.league?'league':'rate');
-  };
-  const exportCSV = () => {
-    let csv="\uFEFF日時,勝者,敗者\n";
-    [...matches,...leagueMatches].forEach(m=>{
-      csv+=`${new Date(m.playedAt).toLocaleString()},${players[m.result].name},${players[m.p1===m.result?m.p2:m.p1].name}\n`;
-    });
-    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-    const a=document.createElement('a');a.href=url;a.download='ankka.csv';a.click();
-  };
-
-  return (
-    <div style={{maxWidth:480,margin:'0 auto',padding:'12px 12px calc(16px + env(safe-area-inset-bottom))'}}>
-      {/* ヘッダー */}
-      <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
-        <div>
-          <h2 style={{fontSize:18,fontWeight:700}}>Ankkaタイトル戦</h2>
-          <div style={{fontSize:10,color:'#E24B4A'}}>期限: {DEADLINE.toLocaleString()}</div>
+        <div style={{display:'flex', flexDirection:'column', gap:20}}>
+          <ScoreInput name={pData[game.order[0]].name} score={game.scores[game.leg-1][game.order[0]]} c0={game.c0[game.order[0]]} isActive={game.activeIdx === game.order[0]} onScore={v=>setConfirm({who:game.order[0], val:v})}/>
+          <div style={{height:1, background:'#ccc'}}></div>
+          <ScoreInput name={pData[game.order[1]].name} score={game.scores[game.leg-1][game.order[1]]} c0={game.c0[game.order[1]]} isActive={game.activeIdx === game.order[1]} onScore={v=>setConfirm({who:game.order[1], val:v})}/>
         </div>
-        <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
-          {isAdmin && (
-            <select className="btn btn-sm" style={{width:'auto',padding:'6px 8px'}} value={phase} onChange={e=>setPhase(e.target.value)}>
-              <option value="rate">順位戦決定</option>
-              <option value="league">順位戦</option>
-            </select>
-          )}
-          <button className="btn btn-sm" onClick={toggleAdmin}>{isAdmin?'Logout':'Admin'}</button>
+      )}
+      <button className="btn btn-sm" onClick={onCancel}>中断</button>
+    </div>
+  );
+}
+
+// --- Main App ---
+function App() {
+  const [tab, setTab] = useState('rate');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [players, setPlayers] = useState({});
+  const [matches, setMatches] = useState([]);
+  const [leagueMatches, setLeagueMatches] = useState([]);
+  const [activeMatch, setActiveMatch] = useState(null);
+  const [phase, setPhase] = useState('rate');
+  const [showNewMatch, setShowNewMatch] = useState(false);
+  const [newMatchP, setNewMatchP] = useState({ p1: '', p2: '' });
+
+  // Firebase Sync
+  useEffect(() => {
+    const unsub = db.collection("tournament").doc("molkky_data").onSnapshot(doc => {
+      if (doc.exists) {
+        const d = doc.data();
+        setPlayers(d.players || {});
+        setMatches(d.matches || []);
+        setLeagueMatches(d.leagueMatches || []);
+        setPhase(d.phase || 'rate');
+      } else {
+        // Initial setup
+        const initialPlayers = {
+          p1: {name:'選手1', rate:INITIAL_RATE}, p2: {name:'選手2', rate:INITIAL_RATE},
+          p3: {name:'選手3', rate:INITIAL_RATE}, p4: {name:'選手4', rate:INITIAL_RATE}
+        };
+        db.collection("tournament").doc("molkky_data").set({players: initialPlayers, matches:[], leagueMatches:[], phase:'rate'});
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const sync = (p, m, lm, ph) => {
+    db.collection("tournament").doc("molkky_data").update({
+      players: p, matches: m, leagueMatches: lm, phase: ph || phase
+    });
+  };
+
+  const recordResult = (winIdx, history) => {
+    if(new Date() > DEADLINE) return alert("期限切れ");
+    const m = activeMatch;
+    const winId = winIdx === 0 ? m.p1 : m.p2;
+    const loseId = winIdx === 0 ? m.p2 : m.p1;
+    const data = { p1:m.p1, p2:m.p2, result:winId, history, playedAt: m.startTime };
+
+    if(m.league) {
+      sync(players, matches, [...leagueMatches, data]);
+    } else {
+      const wr = players[winId].rate, lr = players[loseId].rate;
+      const nextPlayers = { ...players, 
+        [winId]: { ...players[winId], rate: wr + calcWinGain(wr, lr) },
+        [loseId]: { ...players[loseId], rate: Math.max(0, lr - calcLoseLoss(lr, wr)) }
+      };
+      sync(nextPlayers, [...matches, data], leagueMatches);
+    }
+    setActiveMatch(null); setTab(m.league ? 'league' : 'rate');
+  };
+
+  const exportCSV = () => {
+    let csv = "\uFEFF日時,勝者,敗者\n";
+    [...matches, ...leagueMatches].forEach(m => {
+      csv += `${new Date(m.playedAt).toLocaleString()},${players[m.result]?.name},${players[m.p1===m.result?m.p2:m.p1]?.name}\n`;
+    });
+    const url = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+    const a = document.createElement('a'); a.href=url; a.download='ankka.csv'; a.click();
+  };
+
+  if (!Object.keys(players).length) return <div style={{textAlign:'center', padding:50}}>読み込み中...</div>;
+
+  return (
+    <div style={{maxWidth:500, margin:'0 auto'}}>
+      <div style={{display:'flex', alignItems:'center', marginBottom:15}}>
+        <h2 style={{fontSize:20}}>Ankkaタイトル戦</h2>
+        <div style={{marginLeft:'auto', display:'flex', gap:5}}>
+          <button className="btn btn-sm" onClick={()=>{if(isAdmin||prompt("Pass:")===ADMIN_PASSWORD) setIsAdmin(!isAdmin)}}>{isAdmin?'Logout':'Admin'}</button>
+          {isAdmin && <select className="btn btn-sm" value={phase} onChange={e=>{setPhase(e.target.value); sync(players, matches, leagueMatches, e.target.value)}}>
+            <option value="rate">順位決定</option><option value="league">本戦</option>
+          </select>}
         </div>
       </div>
 
-      {tab==='game' ? (
+      {tab === 'game' ? (
         <GameView match={activeMatch} players={players} onResult={recordResult} onCancel={()=>setTab('rate')}/>
       ) : (
         <>
           <div className="tab-bar">
-            {[['rate','レート'],['league','順位戦'],['players','管理']].map(([k,label])=>(
-              <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{label}</button>
+            {['rate','league','players'].map(k => (
+              <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{k==='rate'?'レート':k==='league'?'順位戦':'管理'}</button>
             ))}
           </div>
-
-          {tab==='rate' && (
-            <div>
-              <div style={{marginBottom:10,display:'flex',gap:8}}>
-                <button className="btn btn-sm" onClick={()=>setShowNewMatch(true)}>+ 対戦記録</button>
+          {tab === 'rate' && (
+            <div className="card">
+              <div style={{marginBottom:10, display:'flex', gap:8}}>
+                <button className="btn btn-sm btn-primary" onClick={()=>setShowNewMatch(true)}>+ 対戦記録</button>
                 <button className="btn btn-sm" onClick={exportCSV}>CSV</button>
               </div>
-              <div className="card"><RateTab players={players} matches={matches}/></div>
+              <table>
+                <thead><tr><th>選手</th><th>Rate</th><th>試合</th></tr></thead>
+                <tbody>{Object.entries(players).sort((a,b)=>b[1].rate-a[1].rate).map(([id,p])=>(
+                  <tr key={id}><td>{p.name}</td><td>{p.rate}</td><td>{matches.filter(m=>m.p1===id||m.p2===id).length}</td></tr>
+                ))}</tbody>
+              </table>
             </div>
           )}
-
-          {tab==='league' && <LeagueTab players={players} leagueMatches={leagueMatches} onStartMatch={startMatch} isAdmin={isAdmin}/>}
-
-          {tab==='players' && (
+          {tab === 'league' && (
+            <div className="card" style={{overflowX:'auto'}}>
+              <table style={{minWidth:400, textAlign:'center'}}>
+                <thead><tr><th style={{width:60}}></th>{Object.keys(players).map(id=><th key={id}>{players[id].name.slice(0,3)}</th>)}</tr></thead>
+                <tbody>{Object.keys(players).map(p1=>(
+                  <tr key={p1}><td>{players[p1].name.slice(0,3)}</td>{Object.keys(players).map(p2=>{
+                    if(p1===p2) return <td key={p2} style={{background:'#eee'}}></td>;
+                    const m = leagueMatches.find(x=>(x.p1===p1&&x.p2===p2)||(x.p1===p2&&x.p2===p1));
+                    if(!m) return <td key={p2}><button className="btn btn-sm" onClick={()=>{setActiveMatch({p1,p2,league:true,startTime:Date.now()});setTab('game')}}>▶</button></td>;
+                    return <td key={p2}><span className={`badge ${m.result===p1?'badge-win':'badge-lose'}`}>{m.result===p1?'勝':'負'}</span></td>;
+                  })}</tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          {tab === 'players' && (
             <div className="card">
-              {Object.entries(players).map(([id,p])=>(
-                <div key={id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'0.5px solid var(--bdr)'}}>
-                  <span style={{fontWeight:500}}>{p.name} <span style={{color:'var(--txt2)',fontSize:12}}>({p.rate})</span></span>
-                  {isAdmin && <button className="btn btn-sm btn-danger" onClick={()=>{const n={...players};delete n[id];setPlayers(n);}}>削除</button>}
+              {Object.entries(players).map(([id, p])=>(
+                <div key={id} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid #eee'}}>
+                  <span>{p.name} ({p.rate})</span>
+                  {isAdmin && <button className="btn btn-sm btn-danger" onClick={()=>{const n={...players}; delete n[id]; sync(n, matches, leagueMatches)}}>削除</button>}
                 </div>
               ))}
-              {isAdmin && <button className="btn btn-sm" style={{marginTop:12}} onClick={()=>{const nm=prompt("Name:");if(nm)setPlayers({...players,['p'+Date.now()]:{name:nm,rate:INITIAL_RATE}});}}>+ 追加</button>}
+              {isAdmin && <button className="btn btn-sm" style={{marginTop:10}} onClick={()=>{
+                const nm = prompt("名前:");
+                if(nm) sync({...players, ['p'+Date.now()]: {name:nm, rate:INITIAL_RATE}}, matches, leagueMatches);
+              }}>+ 選手追加</button>}
             </div>
           )}
         </>
       )}
 
-      {/* 対戦カード選択モーダル */}
       {showNewMatch && (
-        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setShowNewMatch(false);}}>
-          <div className="modal">
-            <p style={{fontWeight:700,fontSize:16,marginBottom:16}}>対戦カード</p>
-            <p style={{fontSize:12,color:'var(--txt2)',marginBottom:6}}>選手A（第1本目 先行）</p>
-            <select onChange={e=>setNewMatchP({...newMatchP,p1:e.target.value})} style={{marginBottom:14}}>
-              <option value="">選択してください</option>
-              {Object.keys(players).map(id=><option key={id} value={id}>{players[id].name}</option>)}
-            </select>
-            <p style={{fontSize:12,color:'var(--txt2)',marginBottom:6}}>選手B（第1本目 後攻）</p>
-            <select onChange={e=>setNewMatchP({...newMatchP,p2:e.target.value})} style={{marginBottom:20}}>
-              <option value="">選択してください</option>
-              {Object.keys(players).filter(id=>id!==newMatchP.p1).map(id=><option key={id} value={id}>{players[id].name}</option>)}
-            </select>
-            <div style={{display:'flex',gap:10}}>
-              <button className="btn btn-primary" style={{flex:1,padding:13}} onClick={()=>{if(newMatchP.p1&&newMatchP.p2){startMatch(newMatchP.p1,newMatchP.p2);setShowNewMatch(false);}}} >開始</button>
-              <button className="btn" style={{flex:1,padding:13}} onClick={()=>setShowNewMatch(false)}>キャンセル</button>
-            </div>
+        <div className="modal-overlay"><div className="modal">
+          <p className="section-label">対戦カード</p>
+          <select onChange={e=>setNewMatchP({...newMatchP, p1:e.target.value})}><option>選手A</option>{Object.keys(players).map(id=><option key={id} value={id}>{players[id].name}</option>)}</select>
+          <select onChange={e=>setNewMatchP({...newMatchP, p2:e.target.value})} style={{marginTop:10}}><option>選手B</option>{Object.keys(players).filter(id=>id!==newMatchP.p1).map(id=><option key={id} value={id}>{players[id].name}</option>)}</select>
+          <div style={{marginTop:20, display:'flex', gap:10}}>
+            <button className="btn btn-primary" style={{flex:1}} onClick={()=>{if(newMatchP.p1 && newMatchP.p2){setActiveMatch({p1:newMatchP.p1, p2:newMatchP.p2, league:phase==='league', startTime:Date.now()}); setTab('game'); setShowNewMatch(false);}}}>開始</button>
+            <button className="btn" style={{flex:1}} onClick={()=>setShowNewMatch(false)}>中止</button>
           </div>
-        </div>
+        </div></div>
       )}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
 </script>
 </body>
 </html>
+
