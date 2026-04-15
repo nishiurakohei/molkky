@@ -8,3 +8,4 @@ annka_title_app.htmlで追加した機能
 
 一つ前に戻る(50点到達時も)
 
+スマホ対応(縦長)annka_title_app_phone.html
