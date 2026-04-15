@@ -11,101 +11,104 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
 :root {
-  /* ライトモード（基本設定） */
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666;
-  --color-background-page: #f0f2f5; /* 背景を少し暗いグレーに */
-  --color-background-card: #ffffff; /* カードを真っ白に */
-  --color-border: rgba(0,0,0,0.15);
-  --color-accent: #639922; /* モルックグリーン */
+  /* 明確にコントラストを付けるための直接指定 */
+  --bg-page: #f0f2f5;      /* 薄いグレーの背景 */
+  --bg-card: #ffffff;      /* 真っ白なカード */
+  --text-main: #000000;    /* 真っ黒な文字（確実に見える） */
+  --text-sub: #555555;     /* 濃いグレーのサブ文字 */
+  --accent: #639922;       /* モルックグリーン */
+  --border: #cccccc;       /* はっきりした境界線 */
 }
 
+/* ダークモードを一旦無効化して「確実な視認性」を優先する場合は、
+   以下の @media 部分を削除するか、このように明示的に色を指定します */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* ダークモード設定 */
-    --color-text-primary: #f0f0ee;
-    --color-text-secondary: #aaaaaa;
-    --color-background-page: #121212; /* 真っ黒に近い背景 */
-    --color-background-card: #1e1e1e; /* 少し明るいグレーのカード */
-    --color-border: rgba(255,255,255,0.1);
+    --bg-page: #1a1a1a;
+    --bg-card: #2d2d2d;
+    --text-main: #ffffff;
+    --text-sub: #bbbbbb;
+    --border: #444444;
   }
 }
 
 body { 
-  font-family: system-ui, -apple-system, sans-serif; 
-  background-color: var(--color-background-page); 
-  color: var(--color-text-primary); 
-  min-height: 100vh; 
-  padding: 12px; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-page); 
+  color: var(--text-main); 
+  padding: 12px;
+  line-height: 1.5;
 }
+
+/* タイトル部分が消えていたので修正 */
+h2 { color: var(--text-main) !important; margin-bottom: 10px; }
 
 .card { 
-  background: var(--color-background-card); 
+  background: var(--bg-card); 
   border-radius: 12px; 
-  padding: 1.25rem; 
-  border: 1px solid var(--color-border); 
+  padding: 1.5rem; 
+  border: 1px solid var(--border); 
   margin-bottom: 16px; 
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* 影をつけて視認性向上 */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* 影を強くして浮かび上がらせる */
 }
 
-.btn { 
-  display: inline-flex; 
-  align-items: center; 
-  justify-content: center; 
-  padding: 10px 16px; 
-  border-radius: 8px; 
-  border: 1px solid var(--color-border); 
-  background: var(--color-background-card); 
-  color: var(--color-text-primary); 
-  cursor: pointer; 
-  font-size: 14px; 
-  font-weight: 600; 
-}
-
-.btn-primary { 
-  background: var(--color-text-primary); 
-  color: var(--color-background-page); 
-  border-color: transparent;
-}
-
-.score-btn { 
-  width: 100%; 
-  height: 60px; 
-  border-radius: 8px; 
-  border: 1px solid var(--color-border); 
-  background: var(--color-background-page); 
-  font-size: 20px; 
-  font-weight: bold; 
-  color: var(--color-text-primary); 
-}
-
-.score-btn.zero { 
-  border-color: #E24B4A; 
-  color: #E24B4A; 
-}
-
+/* タブの視認性を改善 */
 .tab-bar { 
   display: flex; 
-  border-bottom: 1px solid var(--color-border); 
-  margin-bottom: 1rem; 
-  background: var(--color-background-card);
-  border-radius: 8px 8px 0 0;
+  background: var(--bg-card);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .tab { 
   flex: 1; 
-  padding: 14px; 
+  padding: 15px 5px; 
   border: none; 
   background: none; 
-  color: var(--color-text-secondary); 
-  font-size: 14px;
+  color: var(--text-sub); 
+  font-size: 15px;
   font-weight: bold;
+  transition: all 0.2s;
 }
 
 .tab.active { 
-  color: var(--color-text-primary); 
-  border-bottom: 3px solid var(--color-accent); 
+  color: var(--accent); 
+  background: rgba(99, 153, 34, 0.1);
+  border-bottom: 4px solid var(--accent); 
+}
+
+/* ボタンをはっきりさせる */
+.btn { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  padding: 8px 16px; 
+  border-radius: 8px; 
+  border: 2px solid var(--text-main); /* 枠線を太く */
+  background: var(--bg-card); 
+  color: var(--text-main); 
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-primary { 
+  background: var(--text-main); 
+  color: var(--bg-card); 
+}
+
+/* テーブルの文字がくっついていたのを修正 */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { text-align: left; padding: 10px 5px; border-bottom: 2px solid var(--border); color: var(--text-sub); }
+td { padding: 12px 5px; border-bottom: 1px solid var(--border); color: var(--text-main); font-size: 16px; }
+
+/* スコアボタン（GameView用） */
+.score-btn {
+  width: 100%; height: 65px; border-radius: 10px; border: 2px solid var(--border);
+  background: var(--bg-card); font-size: 22px; font-weight: bold; color: var(--text-main);
 }
 </style>
 </head>
