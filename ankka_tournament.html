@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ankkaタイトル戦</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666;
+  --color-background-primary: #fff;
+  --color-background-secondary: #f5f5f3;
+  --color-background-tertiary: #ebebea;
+  --color-border-tertiary: rgba(0,0,0,0.12);
+  --color-border-secondary: rgba(0,0,0,0.22);
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text-primary: #f0f0ee;
+    --color-text-secondary: #999;
+    --color-background-primary: #1c1c1a;
+    --color-background-secondary: #2a2a28;
+    --color-background-tertiary: #333330;
+    --color-border-tertiary: rgba(255,255,255,0.1);
+    --color-border-secondary: rgba(255,255,255,0.2);
+  }
+}
+body { font-family: var(--font-sans); background: var(--color-background-tertiary); color: var(--color-text-primary); min-height: 100vh; }
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.15s; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--color-text-primary); color: var(--color-background-primary); border-color: transparent; }
+.btn-primary:hover { opacity: 0.85; background: var(--color-text-primary); }
+.btn-danger { border-color: #E24B4A; color: #E24B4A; }
+.btn-danger:hover { background: #FCEBEB; }
+.btn-success { border-color: #639922; color: #639922; }
+.btn-success:hover { background: #EAF3DE; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.card { background: var(--color-background-primary); border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); padding: 1rem 1.25rem; }
+.tab-bar { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.5rem; gap: 4px; }
+.tab { padding: 8px 14px; border: none; background: none; color: var(--color-text-secondary); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+.score-btn { width: 60px; height: 60px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); font-size: 20px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; color: var(--color-text-primary); }
+.score-btn:hover { background: var(--color-background-tertiary); }
+.score-btn.zero { border-color: #E24B4A; color: #E24B4A; }
+.big-score { font-size: 64px; font-weight: 500; text-align: center; line-height: 1; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; }
+.badge-win { background: #EAF3DE; color: #3B6D11; }
+.badge-lose { background: #FCEBEB; color: #A32D2D; }
+input[type=text], input[type=number], select { padding: 8px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 14px; width: 100%; }
+input:focus, select:focus { outline: none; box-shadow: 0 0 0 2px var(--color-border-secondary); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 8px 6px; text-align: left; color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border-tertiary); }
+td { padding: 8px 6px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.section-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal { background: var(--color-background-primary); border-radius: var(--border-radius-lg); padding: 1.5rem; width: 100%; max-width: 420px; border: 0.5px solid var(--color-border-tertiary); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const INITIAL_RATE = 1500;
+
+function calcWinGain(myRate, oppRate) {
+  return Math.round(24 + (oppRate - myRate) * 0.06);
+}
+function calcLoseLoss(myRate, oppRate) {
+  return Math.round(20 + (myRate - oppRate) * 0.05);
+}
+
+function applyScore(current, add) {
+  const next = current + add;
+  if (next === 50) return { score: 50, won: true };
+  if (next > 50) return { score: 25, won: false };
+  return { score: next, won: false };
+}
+
+const SCORE_OPTS = [0,1,2,3,4,5,6,7,8,9,10,11,12];
+
+function ScoreInput({ player, score, consec0, onScore }) {
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
+      <div style={{fontSize:14, fontWeight:500}}>{player}</div>
+      <div className="big-score" style={{color: score>=40 ? '#639922' : undefined}}>{score}</div>
+      {consec0 > 0 && <div style={{fontSize:12, color:'#E24B4A'}}>⚠ 連続0: {consec0}回</div>}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, width:'100%'}}>
+        {SCORE_OPTS.map(v => (
+          <button key={v} className={`score-btn${v===0?' zero':''}`} onClick={()=>onScore(v)}>
+            {v}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GameView({ match, players, onResult, onCancel }) {
+  const p1 = players[match.p1];
+  const p2 = players[match.p2];
+  const [game, setGame] = useState({ leg: 1, scores: [[0,0],[0,0]], consec0: [0,0], history: [], legWins: [0,0], done: false, winner: null });
+  const [pendingScore, setPendingScore] = useState(null);
+  const [confirmWho, setConfirmWho] = useState(null);
+
+  function handleScore(who, val) {
+    if (game.done) return;
+    setPendingScore(val);
+    setConfirmWho(who);
+  }
+
+  function confirmScore() {
+    const who = confirmWho;
+    const val = pendingScore;
+    setPendingScore(null);
+    setConfirmWho(null);
+    setGame(prev => {
+      const sc = prev.scores.map(r=>[...r]);
+      const c0 = [...prev.consec0];
+      const lw = [...prev.legWins];
+      const leg = prev.leg - 1;
+      const res = applyScore(sc[leg][who], val);
+      sc[leg][who] = res.score;
+      if (val === 0) { c0[who]++; } else { c0[who] = 0; }
+      const disqualified = c0[who] >= 3;
+      if (disqualified) {
+        const winner = who === 0 ? 1 : 0;
+        const newLw = [...lw];
+        newLw[winner] = (newLw[winner]||0) + 1;
+        const next = decideLeg(newLw, prev.leg, prev.history, sc, true, winner);
+        return { ...prev, ...next, legWins: newLw };
+      }
+      if (res.won) {
+        const newLw = [...lw];
+        newLw[who] = (newLw[who]||0) + 1;
+        const next = decideLeg(newLw, prev.leg, prev.history, sc, false, who);
+        return { ...prev, ...next, legWins: newLw };
+      }
+      return { ...prev, scores: sc, consec0: [c0[0], c0[1]] };
+    });
+  }
+
+  function decideLeg(legWins, currentLeg, history, sc, disq, legWinner) {
+    const newHist = [...history, { leg: currentLeg, winner: legWinner, sc: sc[currentLeg-1] }];
+    if (legWins[0] >= 2 || legWins[1] >= 2) {
+      const winner = legWins[0] >= 2 ? 0 : 1;
+      return { done: true, winner, history: newHist, scores: sc };
+    }
+    const nextLeg = currentLeg + 1;
+    const newScores = [...sc];
+    if (newScores.length < nextLeg) newScores.push([0,0]);
+    return { leg: nextLeg, scores: newScores, consec0: [0,0], history: newHist };
+  }
+
+  const leg = game.leg - 1;
+  const s = game.scores[leg] || [0,0];
+  const c0 = game.consec0;
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:16}}>
+      {confirmWho !== null && (
+        <div className="modal-overlay">
+          <div className="modal" style={{textAlign:'center'}}>
+            <div style={{fontSize:15, marginBottom:12}}>
+              {(confirmWho===0?p1.name:p2.name)} に <strong style={{fontSize:24}}>{pendingScore}</strong> 点を入力しますか？
+            </div>
+            <div style={{display:'flex', gap:8, justifyContent:'center'}}>
+              <button className="btn btn-primary" onClick={confirmScore}>確定</button>
+              <button className="btn" onClick={()=>{setPendingScore(null);setConfirmWho(null);}}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div style={{fontSize:13, color:'var(--color-text-secondary)'}}>第{game.leg}本目</div>
+        <div style={{display:'flex', gap:6}}>
+          {[0,1].map(i => (
+            <div key={i} style={{display:'flex', gap:3}}>
+              {Array(game.legWins[i]||0).fill(0).map((_,j)=>(
+                <div key={j} style={{width:10,height:10,borderRadius:'50%',background:'#639922'}}/>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      {game.done ? (
+        <div className="card" style={{textAlign:'center'}}>
+          <div style={{fontSize:18, fontWeight:500, marginBottom:8}}>試合終了</div>
+          <div style={{fontSize:22, marginBottom:16}}>🎉 {game.winner===0?p1.name:p2.name} の勝利</div>
+          <div style={{fontSize:13, color:'var(--color-text-secondary)', marginBottom:16}}>
+            {game.history.map((h,i) => (
+              <span key={i} style={{marginRight:8}}>第{h.leg}本: {p1.name} {h.sc[0]} - {h.sc[1]} {p2.name}</span>
+            ))}
+          </div>
+          <button className="btn btn-primary" onClick={()=>onResult(game.winner, game.history)}>結果を記録</button>
+        </div>
+      ) : (
+        <div style={{display:'flex', gap:20}}>
+          <ScoreInput player={p1.name} score={s[0]} consec0={c0[0]} onScore={v=>handleScore(0,v)}/>
+          <div style={{width:'0.5px', background:'var(--color-border-tertiary)', alignSelf:'stretch'}}/>
+          <ScoreInput player={p2.name} score={s[1]} consec0={c0[1]} onScore={v=>handleScore(1,v)}/>
+        </div>
+      )}
+      {!game.done && (
+        <div style={{display:'flex', gap:8, marginTop:8}}>
+          <button className="btn btn-sm" style={{marginLeft:'auto'}} onClick={onCancel}>キャンセル</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RateTab({ players, matches }) {
+  const ranked = Object.entries(players)
+    .map(([id,p]) => ({id, ...p}))
+    .sort((a,b) => b.rate - a.rate);
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:12}}>
+      <table>
+        <thead><tr>
+          <th>#</th><th>選手</th><th>レート</th><th>勝</th><th>敗</th><th>試合数</th>
+        </tr></thead>
+        <tbody>
+          {ranked.map((p,i) => {
+            const myMatches = matches.filter(m => (m.p1===p.id||m.p2===p.id) && m.result);
+            const wins = myMatches.filter(m => m.result===p.id).length;
+            const total = myMatches.length;
+            return (
+              <tr key={p.id} style={i<8?{fontWeight:500}:{}}>
+                <td>{i+1}</td>
+                <td>{p.name}{i<8&&<span style={{marginLeft:6, fontSize:11, color:'#0F6E56'}}>出場権</span>}</td>
+                <td>{p.rate}</td>
+                <td>{wins}</td>
+                <td>{total-wins}</td>
+                <td>{total}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LeagueTab({ players, leagueMatches, onStartMatch }) {
+  const playerIds = Object.keys(players);
+  const getResult = (p1, p2) => leagueMatches.find(m =>
+    (m.p1===p1&&m.p2===p2)||(m.p1===p2&&m.p2===p1)
+  );
+  const standings = playerIds.map(id => {
+    const myM = leagueMatches.filter(m => m.p1===id||m.p2===id);
+    const wins = myM.filter(m => m.result===id).length;
+    const totalScore = myM.reduce((sum,m) => {
+      if (!m.history) return sum;
+      return sum + m.history.reduce((s2,h) => {
+        const idx = m.p1===id?0:1;
+        return s2 + (h.sc?h.sc[idx]:0);
+      },0);
+    },0);
+    const sweeps = myM.filter(m => {
+      if (!m.result) return false;
+      const legWins = [0,0];
+      (m.history||[]).forEach(h => {
+        if (m.p1===id && h.winner===0) legWins[0]++;
+        else if (m.p2===id && h.winner===1) legWins[1]++;
+      });
+      return legWins[0]>=2||legWins[1]>=2;
+    }).length;
+    return { id, name: players[id].name, wins, sweeps, totalScore, played: myM.filter(m=>m.result).length };
+  }).sort((a,b) => b.wins-a.wins || b.sweeps-a.sweeps || b.totalScore-a.totalScore);
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:16}}>
+      <div className="card">
+        <div className="section-label" style={{marginBottom:10}}>順位</div>
+        <table>
+          <thead><tr><th>#</th><th>選手</th><th>勝</th><th>2タテ</th><th>総得点</th></tr></thead>
+          <tbody>
+            {standings.map((p,i) => (
+              <tr key={p.id} style={i===0?{fontWeight:500, color:'#3B6D11'}:{}}>
+                <td>{i+1}</td><td>{p.name}</td><td>{p.wins}</td><td>{p.sweeps}</td><td>{p.totalScore}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="card" style={{overflowX:'auto'}}>
+        <div className="section-label" style={{marginBottom:10}}>対戦表</div>
+        <table style={{tableLayout:'fixed'}}>
+          <thead>
+            <tr>
+              <th style={{width:80}}></th>
+              {playerIds.map(id => <th key={id} style={{width:70, textAlign:'center', fontSize:12}}>{players[id].name.slice(0,4)}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {playerIds.map(p1 => (
+              <tr key={p1}>
+                <td style={{fontSize:12, fontWeight:500}}>{players[p1].name.slice(0,4)}</td>
+                {playerIds.map(p2 => {
+                  if (p1===p2) return <td key={p2} style={{background:'var(--color-background-secondary)',textAlign:'center'}}>—</td>;
+                  const m = getResult(p1, p2);
+                  if (!m) return <td key={p2} style={{textAlign:'center'}}>
+                    <button className="btn btn-sm" onClick={()=>onStartMatch(p1,p2)}>▶</button>
+                  </td>;
+                  const won = m.result===p1;
+                  return <td key={p2} style={{textAlign:'center'}}>
+                    <span className={`badge ${won?'badge-win':'badge-lose'}`}>{won?'勝':'負'}</span>
+                  </td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState('rate');
+  const [players, setPlayers] = useState({
+    p1: { name: 'プレイヤー1', rate: INITIAL_RATE },
+    p2: { name: 'プレイヤー2', rate: INITIAL_RATE },
+    p3: { name: 'プレイヤー3', rate: INITIAL_RATE },
+    p4: { name: 'プレイヤー4', rate: INITIAL_RATE },
+  });
+  const [matches, setMatches] = useState([]);
+  const [leagueMatches, setLeagueMatches] = useState([]);
+  const [activeMatch, setActiveMatch] = useState(null);
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [showNewMatch, setShowNewMatch] = useState(false);
+  const [newMatchP, setNewMatchP] = useState({ p1: '', p2: '' });
+  const [phase, setPhase] = useState('rate');
+
+  function addPlayer() {
+    if (!newName.trim()) return;
+    const id = 'p' + Date.now();
+    setPlayers(prev => ({...prev, [id]: { name: newName.trim(), rate: INITIAL_RATE }}));
+    setNewName('');
+    setShowAddPlayer(false);
+  }
+
+  function startMatch(p1, p2) {
+    setActiveMatch({ p1, p2, league: phase==='league' });
+    setTab('game');
+  }
+
+  function recordResult(winnerIdx, history) {
+    const m = activeMatch;
+    const winnerId = winnerIdx === 0 ? m.p1 : m.p2;
+    const loserId = winnerIdx === 0 ? m.p2 : m.p1;
+    if (m.league) {
+      setLeagueMatches(prev => [...prev, { p1:m.p1, p2:m.p2, result:winnerId, history }]);
+    } else {
+      setMatches(prev => [...prev, { p1:m.p1, p2:m.p2, result:winnerId, history }]);
+      setPlayers(prev => {
+        const wr = prev[winnerId].rate;
+        const lr = prev[loserId].rate;
+        const gain = calcWinGain(wr, lr);
+        const loss = calcLoseLoss(lr, wr);
+        return {
+          ...prev,
+          [winnerId]: { ...prev[winnerId], rate: wr + gain },
+          [loserId]: { ...prev[loserId], rate: Math.max(0, lr - loss) },
+        };
+      });
+    }
+    setActiveMatch(null);
+    setTab(m.league ? 'league' : 'rate');
+  }
+
+  const playerIds = Object.keys(players);
+
+  function exportCSV() {
+    const rows = [['選手名','レート','勝利数','敗北数']];
+    Object.entries(players).forEach(([id,p]) => {
+      const myM = matches.filter(m => m.p1===id||m.p2===id);
+      const wins = myM.filter(m => m.result===id).length;
+      rows.push([p.name, p.rate, wins, myM.length-wins]);
+    });
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='ankka_rate.csv'; a.click();
+  }
+
+  return (
+    <div style={{maxWidth:720, margin:'0 auto', padding:'1rem'}}>
+      <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:'1.5rem'}}>
+        <div>
+          <div style={{fontSize:20, fontWeight:500}}>Ankkaタイトル戦</div>
+          <div style={{fontSize:13, color:'var(--color-text-secondary)'}}>大会管理アプリ</div>
+        </div>
+        <div style={{marginLeft:'auto', display:'flex', gap:8, alignItems:'center'}}>
+          <div style={{fontSize:12, color:'var(--color-text-secondary)'}}>フェーズ:</div>
+          <button className={`btn btn-sm ${phase==='rate'?'btn-primary':''}`} onClick={()=>setPhase('rate')}>順位戦決定</button>
+          <button className={`btn btn-sm ${phase==='league'?'btn-primary':''}`} onClick={()=>setPhase('league')}>順位戦</button>
+        </div>
+      </div>
+
+      {tab==='game' && activeMatch ? (
+        <div className="card">
+          <GameView
+            match={activeMatch}
+            players={players}
+            onResult={recordResult}
+            onCancel={()=>{ setActiveMatch(null); setTab(activeMatch.league?'league':'rate'); }}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="tab-bar">
+            {[
+              {key:'rate', label:'レート表'},
+              {key:'league', label:'順位戦'},
+              {key:'players', label:'選手管理'},
+            ].map(t => (
+              <button key={t.key} className={`tab ${tab===t.key?'active':''}`} onClick={()=>setTab(t.key)}>{t.label}</button>
+            ))}
+          </div>
+
+          {tab==='rate' && (
+            <div style={{display:'flex', flexDirection:'column', gap:16}}>
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                <button className="btn btn-sm" onClick={()=>{ if(playerIds.length>=2) setShowNewMatch(true); }}>+ 対戦を記録</button>
+                <button className="btn btn-sm" onClick={exportCSV}>CSV出力</button>
+              </div>
+              <div className="card">
+                <RateTab players={players} matches={matches}/>
+              </div>
+              <div className="card">
+                <div className="section-label" style={{marginBottom:8}}>対戦履歴</div>
+                {matches.length === 0 ? (
+                  <div style={{color:'var(--color-text-secondary)', fontSize:13}}>まだ試合がありません</div>
+                ) : matches.slice().reverse().map((m,i) => (
+                  <div key={i} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom:'0.5px solid var(--color-border-tertiary)', fontSize:13}}>
+                    <span style={{fontWeight:500, color:'#3B6D11'}}>{players[m.result]?.name}</span>
+                    <span style={{color:'var(--color-text-secondary)'}}>vs</span>
+                    <span>{players[m.p1===m.result?m.p2:m.p1]?.name}</span>
+                    {m.history && <span style={{marginLeft:'auto', color:'var(--color-text-secondary)'}}>
+                      {m.history.map((h,j)=><span key={j} style={{marginLeft:4}}>{h.sc?`${h.sc[0]}-${h.sc[1]}`:'—'}</span>)}
+                    </span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab==='league' && (
+            <LeagueTab players={players} leagueMatches={leagueMatches} onStartMatch={(p1,p2)=>{
+              setActiveMatch({p1,p2,league:true});
+              setTab('game');
+            }}/>
+          )}
+
+          {tab==='players' && (
+            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              <button className="btn btn-sm" style={{alignSelf:'flex-start'}} onClick={()=>setShowAddPlayer(true)}>+ 選手を追加</button>
+              {showAddPlayer && (
+                <div className="card" style={{display:'flex', gap:8, alignItems:'center'}}>
+                  <input type="text" placeholder="選手名" value={newName} onChange={e=>setNewName(e.target.value)} style={{maxWidth:200}}
+                    onKeyDown={e=>{ if(e.key==='Enter') addPlayer(); }}/>
+                  <button className="btn btn-sm btn-primary" onClick={addPlayer}>追加</button>
+                  <button className="btn btn-sm" onClick={()=>setShowAddPlayer(false)}>キャンセル</button>
+                </div>
+              )}
+              <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                {Object.entries(players).map(([id,p]) => (
+                  <div key={id} className="card" style={{display:'flex', alignItems:'center', gap:12}}>
+                    <div style={{width:36, height:36, borderRadius:'50%', background:'var(--color-background-secondary)', display:'flex',alignItems:'center',justifyContent:'center', fontWeight:500, fontSize:14}}>
+                      {p.name[0]}
+                    </div>
+                    <div>
+                      <div style={{fontWeight:500}}>{p.name}</div>
+                      <div style={{fontSize:12, color:'var(--color-text-secondary)'}}>レート: {p.rate}</div>
+                    </div>
+                    <div style={{marginLeft:'auto', display:'flex', gap:8}}>
+                      <button className="btn btn-sm" onClick={()=>{
+                        const nm = prompt('新しい名前:', p.name);
+                        if(nm) setPlayers(prev=>({...prev,[id]:{...prev[id],name:nm}}));
+                      }}>編集</button>
+                      <button className="btn btn-sm btn-danger" onClick={()=>{
+                        if(Object.keys(players).length<=2) return alert('最低2名必要です');
+                        if(confirm(`${p.name}を削除しますか？`)) {
+                          setPlayers(prev=>{ const n={...prev}; delete n[id]; return n; });
+                        }
+                      }}>削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {showNewMatch && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div style={{fontSize:16, fontWeight:500, marginBottom:16}}>対戦を開始</div>
+            <div style={{display:'flex', flexDirection:'column', gap:10}}>
+              <div>
+                <div className="section-label">選手A</div>
+                <select value={newMatchP.p1} onChange={e=>setNewMatchP(p=>({...p,p1:e.target.value}))}>
+                  <option value="">選択してください</option>
+                  {playerIds.map(id=><option key={id} value={id}>{players[id].name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="section-label">選手B</div>
+                <select value={newMatchP.p2} onChange={e=>setNewMatchP(p=>({...p,p2:e.target.value}))}>
+                  <option value="">選択してください</option>
+                  {playerIds.filter(id=>id!==newMatchP.p1).map(id=><option key={id} value={id}>{players[id].name}</option>)}
+                </select>
+              </div>
+              <div style={{display:'flex', gap:8, marginTop:8}}>
+                <button className="btn btn-primary" onClick={()=>{
+                  if(!newMatchP.p1||!newMatchP.p2) return;
+                  setShowNewMatch(false);
+                  startMatch(newMatchP.p1, newMatchP.p2);
+                  setNewMatchP({p1:'',p2:''});
+                }}>試合開始</button>
+                <button className="btn" onClick={()=>{ setShowNewMatch(false); setNewMatchP({p1:'',p2:''}); }}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+</body>
+</html>
