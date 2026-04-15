@@ -375,44 +375,79 @@ function App() {
           )}
           {tab === 'league' && (
   <div className="card" style={{overflowX:'auto'}}>
-    <div style={{marginBottom:10, fontSize:14, color:'var(--accent)', fontWeight:'bold'}}>
-      🏆 レート上位8名による挑戦者決定フェイズ
+    <div style={{
+      marginBottom:12, 
+      padding:'8px', 
+      background:'rgba(99, 153, 34, 0.1)', 
+      borderRadius:'6px',
+      fontSize:13, 
+      color:'var(--accent)', 
+      fontWeight:'bold',
+      textAlign:'center'
+    }}>
+      🏆 レート上位8名による総当たり戦
     </div>
-    <table style={{minWidth:400, textAlign:'center'}}>
+    
+    <table style={{minWidth:400, textAlign:'center', borderCollapse: 'collapse'}}>
       <thead>
         <tr>
-          <th style={{width:60}}></th>
-          {/* 修正：レート順にソートして上位8名のみを抽出 */}
+          <th style={{width:60, borderBottom:'2px solid var(--border)'}}></th>
+          {/* ✅ 修正：上位8名のみを抽出してヘッダーを作成 */}
           {Object.entries(players)
             .sort((a, b) => b[1].rate - a[1].rate)
             .slice(0, 8)
-            .map(([id, p]) => <th key={id}>{p.name.slice(0, 3)}</th>)
+            .map(([id, p]) => (
+              <th key={id} style={{fontSize:12, padding:'8px 4px', borderBottom:'2px solid var(--border)'}}>
+                {p.name.slice(0, 3)}
+              </th>
+            ))
           }
         </tr>
       </thead>
       <tbody>
+        {/* ✅ 修正：縦軸も上位8名のみを抽出 */}
         {Object.entries(players)
           .sort((a, b) => b[1].rate - a[1].rate)
           .slice(0, 8)
           .map(([p1, p1Data]) => (
             <tr key={p1}>
-              <td style={{fontWeight:'bold'}}>{p1Data.name.slice(0, 3)}</td>
+              <td style={{
+                fontWeight:'bold', 
+                fontSize:13, 
+                padding:'10px 4px', 
+                borderRight:'2px solid var(--border)',
+                background: 'var(--bg-card)'
+              }}>
+                {p1Data.name.slice(0, 3)}
+              </td>
               {Object.entries(players)
                 .sort((a, b) => b[1].rate - a[1].rate)
                 .slice(0, 8)
                 .map(([p2, p2Data]) => {
                   if (p1 === p2) return <td key={p2} style={{background: 'var(--bg-page)'}}></td>;
+                  
+                  // 過去の対戦結果を探す
                   const m = leagueMatches.find(x => (x.p1 === p1 && x.p2 === p2) || (x.p1 === p2 && x.p2 === p1));
+                  
                   if (!m) return (
-                    <td key={p2}>
-                      <button className="btn btn-sm" onClick={() => { setActiveMatch({ p1, p2, league: true, startTime: Date.now() }); setTab('game') }}>
+                    <td key={p2} style={{borderBottom:'1px solid var(--border)'}}>
+                      <button 
+                        className="btn btn-sm" 
+                        style={{padding:'4px 8px', fontSize:10}}
+                        onClick={() => { setActiveMatch({ p1, p2, league: true, startTime: Date.now() }); setTab('game') }}
+                      >
                         ▶
                       </button>
                     </td>
                   );
+                  
                   return (
-                    <td key={p2}>
-                      <span style={{color: m.result === p1 ? 'var(--accent)' : '#E24B4A', fontWeight: 'bold'}}>
+                    <td key={p2} style={{borderBottom:'1px solid var(--border)'}}>
+                      <span style={{
+                        color: m.result === p1 ? 'var(--accent)' : '#E24B4A', 
+                        fontWeight: 'bold',
+                        fontSize:16
+                      }}>
                         {m.result === p1 ? '○' : '●'}
                       </span>
                     </td>
@@ -422,6 +457,12 @@ function App() {
           ))}
       </tbody>
     </table>
+    
+    {Object.keys(players).length > 8 && (
+      <div style={{marginTop:12, fontSize:11, color:'var(--text-sub)', textAlign:'center'}}>
+        ※ 9位以下の選手は表示されません。レート戦で順位を上げてください。
+      </div>
+    )}
   </div>
 )}
           {tab === 'players' && (
