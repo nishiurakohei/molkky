@@ -270,7 +270,10 @@ function GameView({ match, players, onResult, onCancel }) {
       {game.done ? (
         <div className="card" style={{textAlign:'center', border:'2px solid var(--accent)'}}>
           <p style={{fontSize:18, fontWeight:'bold'}}>🎉 {pData[game.winner].name} 勝利</p>
-          <button className="btn btn-primary" style={{marginTop:10, width:'100%'}} onClick={()=>onResult(game.winner, game.history)}>結果を送信して終了</button>
+          <button className="btn btn-primary" style={{marginTop:10, width:'100%'}} 
+            onClick={() => onResult(game.winner, game.history, game.logs)}> {/* game.logs を渡す */}
+            結果を送信して終了
+          </button>
         </div>
       ) : (
         <div style={{textAlign:'center'}}>
@@ -379,7 +382,7 @@ function App() {
         <GameView 
           match={activeMatch} 
           players={players} 
-          onResult={(winIdx, history) => recordResult(winIdx, history, activeMatch.logs)} // ※
+          onResult={(winIdx, history, logs) => recordResult(winIdx, history, logs)}// ※
           onCancel={() => setTab('rate')}
         />
       ) : (
