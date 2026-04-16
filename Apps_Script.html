@@ -1,0 +1,247 @@
+// --- 設定項目 (Firebaseコンソールの秘密鍵JSONから転記) ---
+const client_email = "(秘密鍵から転記)";
+const private_key = "(-----BEGIN PRIVATE KEY-----から始まる部分を秘密鍵から転記)";
+const project_id = "molkky-title";
+
+
+
+
+
+// --- 📱 メニュー作成 (スプシ起動時に実行) ---
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🔥 Firebase連携')
+    .addItem('選手データの読み込み', 'pullFromFirebase')
+    .addItem('選手データの保存(反映)', 'pushToFirebase')
+    .addSeparator()
+    .addItem('試合履歴を同期(概要)', 'pullMatchesFromFirebase')
+    .addItem('投擲ログを同期(1投ずつ)', 'syncDetailedLogs')
+    .addToUi();
+}
+
+// --- 1️⃣ 選手データの読み込み ---
+function pullFromFirebase() {
+  const fields = getFullDataFromFirebase();
+  if (!fields || !fields.players) return;
+  
+  const players = fields.players.mapValue.fields;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("選手一覧") || SpreadsheetApp.getActiveSpreadsheet().insertSheet("選手一覧");
+  sheet.clear();
+  
+  const header = [["ID", "名前", "レート"]];
+  const rows = Object.keys(players).map(id => {
+    const p = players[id].mapValue.fields;
+    return [id, p.name.stringValue, p.rate.integerValue || p.rate.doubleValue];
+  });
+  
+  sheet.getRange(1, 1, 1, 3).setValues(header).setFontWeight("bold").setBackground("#eee");
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+  SpreadsheetApp.getUi().alert("選手データを取得しました。");
+}
+
+// --- 2️⃣ 選手データの保存 (反映) ---
+function pushToFirebase() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("選手一覧");
+  const data = sheet.getDataRange().getValues();
+  
+  const playersField = {};
+  for (let i = 1; i < data.length; i++) {
+    const id = data[i][0];
+    const name = data[i][1];
+    const rate = data[i][2];
+    if (id && name) {
+      playersField[id] = {
+        mapValue: { fields: { name: { stringValue: String(name) }, rate: { doubleValue: Number(rate) } } }
+      };
+    }
+  }
+
+  const url = `https://firestore.googleapis.com/v1/projects/${project_id}/databases/(default)/documents/tournament/molkky_data?updateMask.fieldPaths=players`;
+  const options = {
+    "method": "patch",
+    "contentType": "application/json",
+    "headers": { "Authorization": "Bearer " + getAuthToken() },
+    "payload": JSON.stringify({ fields: { players: { mapValue: { fields: playersField } } } })
+  };
+
+  try {
+    UrlFetchApp.fetch(url, options);
+    SpreadsheetApp.getUi().alert("保存完了！全スマホへ反映されました。");
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("保存エラー: " + e.toString());
+  }
+}
+
+// --- 3️⃣ 試合履歴（概要）の同期 ---
+function pullMatchesFromFirebase() {
+  const fields = getFullDataFromFirebase();
+  if (!fields) return;
+  
+  const players = fields.players.mapValue.fields;
+  const allMatches = [];
+  ['matches', 'leagueMatches'].forEach(key => {
+    if (fields[key] && fields[key].arrayValue && fields[key].arrayValue.values) {
+      fields[key].arrayValue.values.forEach(v => {
+        const m = v.mapValue.fields;
+        allMatches.push({
+          type: key === 'matches' ? 'レート戦' : '本戦',
+          p1: players[m.p1.stringValue]?.mapValue.fields.name.stringValue || "不明",
+          p2: players[m.p2.stringValue]?.mapValue.fields.name.stringValue || "不明",
+          winner: players[m.result.stringValue]?.mapValue.fields.name.stringValue || "不明",
+          time: new Date(Number(m.playedAt.integerValue || m.playedAt.doubleValue)).toLocaleString("ja-JP"),
+          history: m.history.arrayValue.values.map(h => {
+            const hs = h.mapValue.fields;
+            const sc = hs.sc.arrayValue.values.map(s => s.integerValue || s.doubleValue);
+            return `第${hs.leg.integerValue || hs.leg.doubleValue}本目:${sc[0]}-${sc[1]}`;
+          }).join(" / ")
+        });
+      });
+    }
+  });
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("試合履歴") || SpreadsheetApp.getActiveSpreadsheet().insertSheet("試合履歴");
+  sheet.clear();
+  const header = [["日時", "種別", "対戦カード", "勝者", "詳細スコア"]];
+  const rows = allMatches.sort((a,b) => new Date(b.time) - new Date(a.time)).map(m => [m.time, m.type, `${m.p1} vs ${m.p2}`, m.winner, m.history]);
+  sheet.getRange(1, 1, 1, 5).setValues(header).setFontWeight("bold").setBackground("#d9ead3");
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, 5).setValues(rows);
+  SpreadsheetApp.getUi().alert("試合履歴を同期しました。");
+}
+
+// --- 4️⃣ 投擲ログ（詳細）の同期 ---
+function syncDetailedLogs() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName("投擲ログ") || ss.insertSheet("投擲ログ");
+  const fields = getFullDataFromFirebase();
+  if (!fields) return;
+
+  const players = fields.players.mapValue.fields;
+  const allMatchesRaw = [];
+  
+  // レート戦と本戦の全データを取得
+  ['matches', 'leagueMatches'].forEach(key => {
+    if (fields[key] && fields[key].arrayValue && fields[key].arrayValue.values) {
+      allMatchesRaw.push(...fields[key].arrayValue.values);
+    }
+  });
+  
+  const rows = [];
+  allMatchesRaw.forEach(v => {
+    const m = v.mapValue.fields;
+    
+    // 🚀 logsを探す（直接のlogsフィールド、またはhistory[0].detailsの中）
+    let logsArray = null;
+    if (m.logs && m.logs.arrayValue && m.logs.arrayValue.values) {
+      logsArray = m.logs.arrayValue.values;
+    } else if (m.history && m.history.arrayValue && m.history.arrayValue.values) {
+      // 予備：historyの最初の要素の中にdetailsがあるか探す
+      const h0 = m.history.arrayValue.values[0].mapValue.fields;
+      if (h0.details && h0.details.arrayValue) logsArray = h0.details.arrayValue.values;
+    }
+
+    if (!logsArray) return; // ログがなければこの試合は飛ばす
+    
+    const playedAt = new Date(Number(m.playedAt.integerValue || m.playedAt.doubleValue || 0)).toLocaleString('ja-JP');
+    const matchId = m.playedAt.integerValue || m.playedAt.doubleValue;
+    let runningScores = [0, 0];
+    let missCounts = [0, 0];
+    
+    logsArray.forEach(logVal => {
+      const log = logVal.mapValue.fields;
+      const getNum = (f) => f ? Number(f.integerValue || f.doubleValue || 0) : 0;
+      
+      const who = getNum(log.who);
+      const val = getNum(log.val);
+      const leg = getNum(log.leg);
+      
+      const pId = who === 0 ? m.p1.stringValue : m.p2.stringValue;
+      const playerName = players[pId] ? players[pId].mapValue.fields.name.stringValue : "不明";
+      
+      // スコア計算ロジック
+      if (val === 0) {
+        missCounts[who]++;
+      } else {
+        missCounts[who] = 0;
+        if (runningScores[who] + val <= 50) {
+          runningScores[who] += val;
+        } else {
+          runningScores[who] = 25; // バースト
+        }
+      }
+      
+      rows.push([playedAt, matchId, playerName, leg, val, runningScores[who], missCounts[who]]);
+    });
+  });
+
+  logSheet.clear();
+  const header = [["日時", "試合ID", "選手名", "本数", "得点", "通算スコア", "連続ミス"]];
+  logSheet.getRange(1, 1, 1, 7).setValues(header).setFontWeight("bold").setBackground("#cfe2f3");
+  
+  if (rows.length > 0) {
+    logSheet.getRange(2, 1, rows.length, 7).setValues(rows);
+    SpreadsheetApp.getUi().alert(rows.length + "件の投擲ログを同期しました。");
+  } else {
+    SpreadsheetApp.getUi().alert("ログデータが見つかりませんでした。アプリを最新版にして新しく試合を行ってください。");
+  }
+}
+
+/**
+ * Firebaseから「molkky_data」ドキュメントの全データを取得する共通関数
+ */
+function getFullDataFromFirebase() {
+  const url = `https://firestore.googleapis.com/v1/projects/${project_id}/databases/(default)/documents/tournament/molkky_data`;
+  const options = {
+    "method": "get",
+    "headers": { "Authorization": "Bearer " + getAuthToken() }
+  };
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const json = JSON.parse(response.getContentText());
+    return json.fields; // Firestoreのデータ本体(fields)を返す
+  } catch (e) {
+    console.error("Firebase接続エラー: " + e.toString());
+    SpreadsheetApp.getUi().alert("Firebase接続エラー: 設定や権限を確認してください。\n" + e.toString());
+    return null;
+  }
+}
+
+function getVal(f) {
+  return f ? Number(f.integerValue || f.doubleValue || 0) : 0;
+}
+
+/**
+ * Firebaseとの通信に必要な認証トークンを生成する関数
+ */
+function getAuthToken() {
+  const header = JSON.stringify({ "alg": "RS256", "typ": "JWT" });
+  const now = Math.floor(Date.now() / 1000);
+  const claim = JSON.stringify({
+    "iss": client_email,
+    "scope": "https://www.googleapis.com/auth/datastore",
+    "aud": "https://oauth2.googleapis.com/token",
+    "exp": now + 3600,
+    "iat": now
+  });
+
+  const encodedHeader = Utilities.base64EncodeWebSafe(header);
+  const encodedClaim = Utilities.base64EncodeWebSafe(claim);
+  const signature = Utilities.computeRsaSha256Signature(encodedHeader + "." + encodedClaim, private_key);
+  const encodedSignature = Utilities.base64EncodeWebSafe(signature);
+  const jwt = encodedHeader + "." + encodedClaim + "." + encodedSignature;
+  
+  const options = {
+    "method": "post",
+    "payload": {
+      "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      "assertion": jwt
+    }
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch("https://oauth2.googleapis.com/token", options);
+    return JSON.parse(response.getContentText()).access_token;
+  } catch (e) {
+    console.error("トークン取得エラー: " + e.toString());
+    throw new Error("Google認証に失敗しました。client_emailやprivate_keyを確認してください。");
+  }
+}
