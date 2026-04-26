@@ -226,22 +226,76 @@ function GameView({ match, players, onResult, onCancel }) {
   const currentScores = game.scores[game.leg - 1];
 
   return (
-    <div style={{display:'flex', flexDirection:'column', gap:10}}>
-      {game.choicePending && (
-        <div className="modal-overlay"><div className="modal">
-          <p style={{marginBottom:15, fontWeight:'bold', textAlign:'center'}}>3レッグ目の先攻を選択</p>
-          <div style={{display:'flex', gap:8}}>{[0,1].map(i => <button key={i} className="btn btn-primary" style={{flex:1}} onClick={()=>setGame(prev=>({...prev, order:i===0?[0,1]:[1,0], activeIdx:i, choicePending:false}))}>{pData[i].name}</button>)}</div>
-        </div></div>
-      )}
-      {confirm && (
-        <div className="modal-overlay"><div className="modal" style={{textAlign:'center'}}>
-          <p>{pData[confirm.who].name} に <strong>{confirm.val}</strong> 点を入力？</p>
-          <div style={{display:'flex', gap:10, justifyContent:'center', marginTop:15}}>
-            <button className="btn btn-primary" onClick={confirmScore}>確定</button>
-            <button className="btn" onClick={()=>setConfirm(null)}>中止</button>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+    
+    {/* 1. 現時点でのスコア表示エリア（この背後に配置される） */}
+    <div className="current-scores">
+      {/* ここに現在のスコアを表示する既存のコードが入ります */}
+    </div>
+
+    {/* 2. 3レッグ目の先攻選択モーダル */}
+    {game.choicePending && (
+      <div className="modal-overlay">
+        <div className="modal shadow-lg">
+          <p style={{ marginBottom: 15, fontWeight: 'bold', textAlign: 'center' }}>3レッグ目の先攻を選択</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[0, 1].map(i => (
+              <button 
+                key={i} 
+                className="btn btn-primary" 
+                style={{ flex: 1 }} 
+                onClick={() => setGame(prev => ({ ...prev, order: i === 0 ? [0, 1] : [1, 0], activeIdx: i, choicePending: false }))}
+              >
+                {pData[i].name}
+              </button>
+            ))}
           </div>
-        </div></div>
-      )}
+        </div>
+      </div>
+    )}
+
+    {/* 3. 得点入力時の確認モーダル（画面中央に浮き上がる） */}
+    {confirm && (
+      /* modal-overlay: 画面全体を覆い、中身を中央に寄せる */
+      <div style={{
+        position: 'fixed',    // 画面に固定
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)', // 背景を暗くする
+        display: 'flex',
+        justifyContent: 'center', // 左右中央
+        alignItems: 'center',     // 上下中央
+        zIndex: 9999,             // 他の要素より一番上に
+        backdropFilter: 'blur(4px)' // 背景をぼかす
+      }}>
+        <div style={{
+          backgroundColor: '#1a1a1a', // 画面に合わせて暗めにする場合
+          padding: '25px',
+          borderRadius: '16px',
+          border: '1px solid #333',
+          width: '85%',
+          maxWidth: '400px',
+          textAlign: 'center',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+        }}>
+          <p style={{ color: '#ccc', marginBottom: 8 }}>{pData[confirm.who].name} に</p>
+          <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#007bff', marginBottom: 20 }}>
+            {confirm.val} 点を入力？
+          </p>
+          
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button className="btn btn-primary" style={{ padding: '10px 30px' }} onClick={confirmScore}>
+              確定
+            </button>
+            <button className="btn" style={{ padding: '10px 30px', backgroundColor: '#333', color: '#fff' }} onClick={() => setConfirm(null)}>
+              中止
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom: '1px solid var(--border)', paddingBottom: '10px'}}>
         <span style={{fontWeight:'bold', color: 'var(--accent)'}}>第{game.leg}本目</span>
@@ -385,7 +439,7 @@ function App() {
   return (
     <div style={{maxWidth:500, margin:'0 auto'}}>
       <div style={{display:'flex', alignItems:'center', marginBottom:15}}>
-        <h2 style={{fontSize:20}}>Ankkaタイトル戦</h2>
+        <h2 style={{fontSize:20}}>鴨王戦</h2>
         <div style={{marginLeft:'auto', display:'flex', gap:5}}>
           <button className="btn btn-sm" onClick={()=>{if(isAdmin||prompt("Pass:")===ADMIN_PASSWORD) setIsAdmin(!isAdmin)}}>{isAdmin?'Logout':'Admin'}</button>
           {isAdmin && <select className="btn btn-sm" value={phase} onChange={e=>{setPhase(e.target.value); sync(players, matches, leagueMatches, e.target.value)}}>
@@ -556,4 +610,6 @@ root.render(<App />);
 </script>
 </body>
 </html>
+
+
 
