@@ -132,8 +132,8 @@ const db = firebase.firestore();
 
 // --- Logics ---
 const INITIAL_RATE = 1500;
-const ADMIN_PASSWORD = "kyoto";
-const DEADLINE = new Date('2026-04-20T23:59:59');
+const ADMIN_PASSWORD = "IsThisAnkka";
+const DEADLINE = new Date('2026-05-08T23:59:59');
 
 function calcWinGain(myR, oppR) { return Math.round(24 + (oppR - myR) * 0.06); }
 function calcLoseLoss(myR, oppR) { return Math.round(20 + (myR - oppR) * 0.05); }
