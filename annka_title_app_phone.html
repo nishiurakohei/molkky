@@ -133,7 +133,7 @@ const db = firebase.firestore();
 // --- Logics ---
 const INITIAL_RATE = 1500;
 const ADMIN_PASSWORD = "IsThisAnkka";
-const DEADLINE = new Date('2026-05-08T20:59:59');
+const DEADLINE = new Date('2026-05-08T23:59:59');
 
 function calcWinGain(myR, oppR) { return Math.round(24 + (oppR - myR) * 0.06); }
 function calcLoseLoss(myR, oppR) { return Math.round(20 + (myR - oppR) * 0.05); }
@@ -141,6 +141,23 @@ function applyScore(cur, add) {
   const n = cur + add;
   return n === 50 ? { score: 50, won: true } : (n > 50 ? { score: 25, won: false } : { score: n, won: false });
 }
+
+// --- Chess Clock Constants ---
+const INIT_BANK_MS = 600000;   // 10分の本時計
+const FORTY_MS = 40000;        // 40秒モード
+const UNDO_BONUS_MS = 10000;   // 戻すボタンを押したときの+10秒ボーナス
+
+function formatMs(ms) {
+  if (ms < 0) ms = 0;
+  const totalDeci = Math.floor(ms / 100);
+  const totalSec = Math.floor(totalDeci / 10);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  const deci = totalDeci % 10;
+  if (min > 0) return `${min}:${String(sec).padStart(2,'0')}`;
+  return `${sec}.${deci}`;
+}
+
 
 // --- Components ---
 // 1. ScoreInputの代わりにこのパネル部品を定義
@@ -171,170 +188,340 @@ function ScorePanel({ onScore, disabled }) {
 // 2. GameViewをまるごと差し替え
 function GameView({ match, players, onResult, onCancel }) {
   const pData = [players[match.p1], players[match.p2]];
+
   const [game, setGame] = useState({
-  leg: 1, scores: [[0,0]], c0: [0,0], legWins: [0,0], 
-  history: [], logs: [], // ← ここに1投ごとの全ログを溜める
-  done: false, winner: null, order: [0, 1], activeIdx: 0, choicePending: false
-});
+    leg: 1, scores: [[0,0]], c0: [0,0], legWins: [0,0],
+    history: [], logs: [],
+    done: false, winner: null, order: [0, 1], activeIdx: 0, choicePending: false,
+    // チェスクロック関連
+    bankMs: [INIT_BANK_MS, INIT_BANK_MS], // 各選手の本時計の残り(ms)
+    clockMode: ['main', 'main'],          // 'main'=本時計 / 'forty'=40秒モード
+    turnStartedAt: Date.now(),            // 現在の投擲者の手番開始時刻
+    paused: false,                        // 一時停止中か
+    pausedAt: null,                       // 一時停止に入った時刻
+  });
   const [prevGame, setPrevGame] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [, setTickKey] = useState(0);
+  const [violationFlash, setViolationFlash] = useState(null);
 
-  const confirmScore = () => {
-    const { who, val } = confirm;
-    setConfirm(null);
+  // 100msごとに再描画(時計表示更新)
+  useEffect(() => {
+    if (game.done || game.paused || game.choicePending) return;
+    const id = setInterval(() => setTickKey(k => k + 1), 100);
+    return () => clearInterval(id);
+  }, [game.done, game.paused, game.choicePending]);
+
+  // 違反フラッシュ自動消去
+  useEffect(() => {
+    if (!violationFlash) return;
+    const t = setTimeout(() => setViolationFlash(null), 3000);
+    return () => clearTimeout(t);
+  }, [violationFlash]);
+
+  // 各選手の現在の表示時間とモードを計算
+  const computeDisplay = (idx, g = game) => {
+    const isActive = idx === g.activeIdx && !g.done && !g.choicePending;
+    let elapsed = 0;
+    if (isActive) {
+      const ref = g.paused ? g.pausedAt : Date.now();
+      elapsed = Math.max(0, ref - g.turnStartedAt);
+    }
+    if (g.clockMode[idx] === 'main') {
+      const remaining = g.bankMs[idx] - elapsed;
+      if (remaining > 0) return { mode: 'main', ms: remaining };
+      // 本時計が手番途中で切れた場合、その続きから40秒モード
+      const fortyRem = FORTY_MS - (-remaining);
+      return { mode: 'forty', ms: Math.max(0, fortyRem) };
+    }
+    return { mode: 'forty', ms: Math.max(0, FORTY_MS - elapsed) };
+  };
+
+  // 1投を確定する(手動confirm or 時間切れ自動0点)
+  const applyThrow = (who, val) => {
+    if (game.done) return;
+
+    const now = Date.now();
+    const ref = game.paused ? game.pausedAt : now;
+    const elapsed = Math.max(0, ref - game.turnStartedAt);
+    let actualVal = val;
+    let timedOut = false;
+    const newBankMs = [...game.bankMs];
+    const newClockMode = [...game.clockMode];
+
+    if (game.clockMode[who] === 'main') {
+      if (elapsed >= game.bankMs[who]) {
+        const overage = elapsed - game.bankMs[who];
+        newBankMs[who] = 0;
+        newClockMode[who] = 'forty';
+        if (overage >= FORTY_MS) { actualVal = 0; timedOut = true; }
+      } else {
+        newBankMs[who] = game.bankMs[who] - elapsed;
+      }
+    } else {
+      if (elapsed >= FORTY_MS) { actualVal = 0; timedOut = true; }
+    }
+
+    if (timedOut) setViolationFlash({ name: pData[who].name, t: now });
+
     setPrevGame(game);
     setGame(prev => {
-      // 1. ログの作成
-      const newLog = { who, val, leg: prev.leg, time: Date.now() };
+      const newLog = { who, val: actualVal, leg: prev.leg, time: now, originalVal: val, timedOut, elapsedMs: elapsed };
       const nLogs = [...prev.logs, newLog];
-      
-      const sc = prev.scores.map(r=>[...r]);
+
+      const sc = prev.scores.map(r => [...r]);
       const c0 = [...prev.c0];
       const lw = [...prev.legWins];
-      const res = applyScore(sc[prev.leg-1][who], val);
-      sc[prev.leg-1][who] = res.score;
-      c0[who] = (val === 0) ? c0[who] + 1 : 0;
+      const res = applyScore(sc[prev.leg - 1][who], actualVal);
+      sc[prev.leg - 1][who] = res.score;
+      c0[who] = (actualVal === 0) ? c0[who] + 1 : 0;
       const isDisq = c0[who] >= 3;
       const wonIdx = isDisq ? (who === 0 ? 1 : 0) : (res.won ? who : null);
+
+      const baseUpdate = {
+        ...prev,
+        bankMs: newBankMs,
+        clockMode: newClockMode,
+        turnStartedAt: now,
+        paused: false,
+        pausedAt: null,
+      };
 
       if (wonIdx !== null) {
         const nLw = [...lw]; nLw[wonIdx]++;
         const currentLegLogs = nLogs.filter(l => l.leg === prev.leg);
-        const nHist = [...prev.history, { leg: prev.leg, winner: wonIdx, sc: sc[prev.leg-1], details: currentLegLogs }];
-        
-        // 試合終了時
-        if (nLw[wonIdx] >= 2) return { ...prev, done: true, winner: wonIdx, history: nHist, scores: sc, logs: nLogs };
-        
-        // 次のレッグへの遷移
+        const nHist = [...prev.history, { leg: prev.leg, winner: wonIdx, sc: sc[prev.leg - 1], details: currentLegLogs }];
+
+        if (nLw[wonIdx] >= 2) {
+          return { ...baseUpdate, done: true, winner: wonIdx, history: nHist, scores: sc, logs: nLogs };
+        }
         const nLeg = prev.leg + 1;
-        const nSc = [...sc, [0,0]];
-        if (nLeg === 2) return { ...prev, leg: 2, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: [1, 0], activeIdx: 1, logs: nLogs };
+        const nSc = [...sc, [0, 0]];
+        if (nLeg === 2) {
+          return { ...baseUpdate, leg: 2, scores: nSc, c0: [0, 0], history: nHist, legWins: nLw, order: [1, 0], activeIdx: 1, logs: nLogs };
+        }
         if (nLeg === 3) {
           const t1 = sc[0][0] + sc[1][0], t2 = sc[0][1] + sc[1][1];
           const nextOrder = t1 > t2 ? [0, 1] : [1, 0];
-          if (t1 !== t2) return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, order: nextOrder, activeIdx: nextOrder[0], logs: nLogs };
-          return { ...prev, leg: 3, scores: nSc, c0:[0,0], history: nHist, legWins: nLw, choicePending: true, logs: nLogs };
+          if (t1 !== t2) {
+            return { ...baseUpdate, leg: 3, scores: nSc, c0: [0, 0], history: nHist, legWins: nLw, order: nextOrder, activeIdx: nextOrder[0], logs: nLogs };
+          }
+          // 同点: 先攻選択モーダル中はクロックを停止
+          return { ...baseUpdate, leg: 3, scores: nSc, c0: [0, 0], history: nHist, legWins: nLw, choicePending: true, paused: true, pausedAt: now, logs: nLogs };
         }
       }
 
-      // 通常の投擲交代：ここを修正
-      // 先攻(order[0])なら次は後攻(order[1])へ、逆も然り
       const nextIdx = prev.activeIdx === prev.order[0] ? prev.order[1] : prev.order[0];
-      return { ...prev, scores: sc, c0, logs: nLogs, activeIdx: nextIdx };
+      return { ...baseUpdate, scores: sc, c0, logs: nLogs, activeIdx: nextIdx };
     });
   };
+
+  const confirmScore = () => {
+    const { who, val } = confirm;
+    setConfirm(null);
+    applyThrow(who, val);
+  };
+
+  // 自動タイムアウト監視: 40秒切れたら自動で0点を記録
+  useEffect(() => {
+    if (game.done || game.paused || game.choicePending) return;
+    const display = computeDisplay(game.activeIdx);
+    if (display.mode === 'forty' && display.ms <= 0) {
+      const t = setTimeout(() => {
+        setConfirm(null);
+        applyThrow(game.activeIdx, 0);
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  });
+
+  // 戻すボタン: 試合状態は1手戻すが、時計は巻き戻さず +10秒ボーナス
+  const handleUndo = () => {
+    if (!prevGame || game.done) return;
+    setGame(currentGame => ({
+      ...prevGame,
+      bankMs: currentGame.bankMs,         // 巻き戻さない
+      clockMode: currentGame.clockMode,   // 巻き戻さない
+      turnStartedAt: Date.now() + UNDO_BONUS_MS, // +10秒ボーナス
+      paused: currentGame.paused,
+      pausedAt: currentGame.paused ? Date.now() : null,
+    }));
+    setPrevGame(null);
+  };
+
+  // 一時停止のオン/オフ(管理者用)
+  const togglePause = () => {
+    setGame(prev => {
+      if (prev.choicePending || prev.done) return prev;
+      if (prev.paused) {
+        return {
+          ...prev,
+          paused: false,
+          turnStartedAt: prev.turnStartedAt + (Date.now() - prev.pausedAt),
+          pausedAt: null,
+        };
+      }
+      return { ...prev, paused: true, pausedAt: Date.now() };
+    });
+  };
+
   const currentScores = game.scores[game.leg - 1];
 
   return (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
-    
-    {/* 1. 現時点でのスコア表示エリア（この背後に配置される） */}
-    <div className="current-scores">
-      {/* ここに現在のスコアを表示する既存のコードが入ります */}
-    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
 
-    {/* 2. 3レッグ目の先攻選択モーダル */}
-    {game.choicePending && (
-      <div className="modal-overlay">
-        <div className="modal shadow-lg">
-          <p style={{ marginBottom: 15, fontWeight: 'bold', textAlign: 'center' }}>3レッグ目の先攻を選択</p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[0, 1].map(i => (
-              <button 
-                key={i} 
-                className="btn btn-primary" 
-                style={{ flex: 1 }} 
-                onClick={() => setGame(prev => ({ ...prev, order: i === 0 ? [0, 1] : [1, 0], activeIdx: i, choicePending: false }))}
-              >
-                {pData[i].name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* 3. 得点入力時の確認モーダル（画面中央に浮き上がる） */}
-    {confirm && (
-      /* modal-overlay: 画面全体を覆い、中身を中央に寄せる */
-      <div style={{
-        position: 'fixed',    // 画面に固定
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', // 背景を暗くする
-        display: 'flex',
-        justifyContent: 'center', // 左右中央
-        alignItems: 'center',     // 上下中央
-        zIndex: 9999,             // 他の要素より一番上に
-        backdropFilter: 'blur(4px)' // 背景をぼかす
-      }}>
+      {/* タイムアウト通知フラッシュ */}
+      {violationFlash && (
         <div style={{
-          backgroundColor: '#1a1a1a', // 画面に合わせて暗めにする場合
-          padding: '25px',
-          borderRadius: '16px',
-          border: '1px solid #333',
-          width: '85%',
-          maxWidth: '400px',
-          textAlign: 'center',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
+          background: '#E24B4A', color: 'white', padding: '10px 20px', borderRadius: 8,
+          fontWeight: 'bold', zIndex: 10000, boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
         }}>
-          <p style={{ color: '#ccc', marginBottom: 8 }}>{pData[confirm.who].name} に</p>
-          <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#007bff', marginBottom: 20 }}>
-            {confirm.val} 点を入力？
-          </p>
-          
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            <button className="btn btn-primary" style={{ padding: '10px 30px' }} onClick={confirmScore}>
-              確定
-            </button>
-            <button className="btn" style={{ padding: '10px 30px', backgroundColor: '#333', color: '#fff' }} onClick={() => setConfirm(null)}>
-              中止
-            </button>
+          ⚠ {violationFlash.name}：時間切れ → 0点(ミス)を記録
+        </div>
+      )}
+
+      {/* 3レッグ目先攻選択モーダル */}
+      {game.choicePending && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{ background: '#1a1a1a', padding: 25, borderRadius: 16, border: '1px solid #333', width: '85%', maxWidth: 400, textAlign: 'center' }}>
+            <p style={{ color: '#ccc', marginBottom: 15, fontWeight: 'bold' }}>3レッグ目の先攻を選択</p>
+            <p style={{ color: '#888', fontSize: 11, marginBottom: 15 }}>※ 選択中は両者の時計が停止します</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[0, 1].map(i => (
+                <button key={i} className="btn btn-primary" style={{ flex: 1 }}
+                  onClick={() => setGame(prev => ({
+                    ...prev,
+                    order: i === 0 ? [0, 1] : [1, 0],
+                    activeIdx: i,
+                    choicePending: false,
+                    paused: false,
+                    pausedAt: null,
+                    turnStartedAt: Date.now(),
+                  }))}>
+                  {pData[i].name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom: '1px solid var(--border)', paddingBottom: '10px'}}>
-        <span style={{fontWeight:'bold', color: 'var(--accent)'}}>第{game.leg}本目</span>
-        <button className="btn btn-sm" onClick={()=> {setGame(prevGame); setPrevGame(null);}} disabled={!prevGame || game.done}>↩ 戻す</button>
+      {/* 得点確認モーダル */}
+      {confirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: '#1a1a1a', padding: 25, borderRadius: 16, border: '1px solid #333',
+            width: '85%', maxWidth: 400, textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <p style={{ color: '#ccc', marginBottom: 8 }}>{pData[confirm.who].name} に</p>
+            <p style={{ fontSize: 24, fontWeight: 'bold', color: '#007bff', marginBottom: 20 }}>
+              {confirm.val} 点を入力?
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button className="btn btn-primary" style={{ padding: '10px 30px' }} onClick={confirmScore}>確定</button>
+              <button className="btn" style={{ padding: '10px 30px', backgroundColor: '#333', color: '#fff' }} onClick={() => setConfirm(null)}>中止</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ヘッダー: レッグ表示 + 一時停止 + 戻す */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+        <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>第{game.leg}本目</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-sm" onClick={togglePause} disabled={game.done || game.choicePending}
+            style={game.paused ? { background: '#FFC107', color: '#000', borderColor: '#FFC107' } : {}}>
+            {game.paused ? '▶ 再開' : '⏸ 一時停止'}
+          </button>
+          <button className="btn btn-sm" onClick={handleUndo} disabled={!prevGame || game.done}>↩ 戻す</button>
+        </div>
       </div>
 
-      <div className="card" style={{margin: '10px 0', padding: '15px 5px'}}>
-        <div style={{display: 'flex', justifyContent: 'space-around', alignItems: 'center'}}>
-          <div style={{textAlign:'center', flex:1, opacity: game.activeIdx === 0 ? 1 : 0.4}}>
-            <div style={{fontSize:'12px', fontWeight:'bold', height:'18px'}}>{game.activeIdx === 0 ? '●投擲' : ''}</div>
-            <div style={{fontSize:'16px', fontWeight:'bold'}}>{pData[0].name}</div>
-            {game.c0[0] > 0 && <div style={{color:'red', fontSize:'10px'}}>ミス:{game.c0[0]}</div>}
+      {/* チェスクロック表示 */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[0, 1].map(i => {
+          const display = computeDisplay(i);
+          const isActive = i === game.activeIdx && !game.done && !game.choicePending && !game.paused;
+          let color = 'var(--text-main)';
+          if (display.mode === 'forty' && display.ms < 10000) color = '#E24B4A';
+          else if (display.mode === 'forty') color = '#FF9933';
+          else if (display.ms < 60000) color = '#FF9933';
+          return (
+            <div key={i} style={{
+              flex: 1, padding: '10px 6px', borderRadius: 8,
+              border: isActive ? '3px solid var(--accent)' : '2px solid var(--border)',
+              background: isActive ? 'rgba(99,153,34,0.08)' : 'transparent',
+              opacity: isActive ? 1 : 0.65,
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 'bold' }}>{pData[i].name}</div>
+              <div style={{ fontSize: 30, fontWeight: 'bold', color, fontFamily: 'ui-monospace,Menlo,monospace', lineHeight: 1.1, letterSpacing: 1 }}>
+                {formatMs(display.ms)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-sub)' }}>
+                {display.mode === 'main' ? '本時計' : '⚠ 残り40秒モード'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 一時停止インジケータ */}
+      {game.paused && !game.choicePending && (
+        <div style={{ background: '#FFC107', color: '#000', padding: 8, borderRadius: 6, textAlign: 'center', fontWeight: 'bold' }}>
+          一時停止中 — 計測は止まっています
+        </div>
+      )}
+
+      {/* スコア表示 */}
+      <div className="card" style={{ margin: '10px 0', padding: '15px 5px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+          <div style={{ textAlign: 'center', flex: 1, opacity: game.activeIdx === 0 ? 1 : 0.4 }}>
+            <div style={{ fontSize: 12, fontWeight: 'bold', height: 18 }}>{game.activeIdx === 0 && !game.done ? '●投擲' : ''}</div>
+            <div style={{ fontSize: 16, fontWeight: 'bold' }}>{pData[0].name}</div>
+            {game.c0[0] > 0 && <div style={{ color: 'red', fontSize: 10 }}>ミス:{game.c0[0]}</div>}
           </div>
-          <div style={{flex:1.5, textAlign:'center'}}>
-            <div style={{fontSize:'42px', fontWeight:'bold', letterSpacing:'1px'}}>{currentScores[0]} - {currentScores[1]}</div>
-            <div style={{fontSize:'11px', color:'var(--text-sub)'}}>セット数 {game.legWins[0]} - {game.legWins[1]}</div>
+          <div style={{ flex: 1.5, textAlign: 'center' }}>
+            <div style={{ fontSize: 42, fontWeight: 'bold', letterSpacing: 1 }}>{currentScores[0]} - {currentScores[1]}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-sub)' }}>セット数 {game.legWins[0]} - {game.legWins[1]}</div>
           </div>
-          <div style={{textAlign:'center', flex:1, opacity: game.activeIdx === 1 ? 1 : 0.4}}>
-            <div style={{fontSize:'12px', fontWeight:'bold', height:'18px'}}>{game.activeIdx === 1 ? '●投擲' : ''}</div>
-            <div style={{fontSize:'16px', fontWeight:'bold'}}>{pData[1].name}</div>
-            {game.c0[1] > 0 && <div style={{color:'red', fontSize:'10px'}}>ミス:{game.c0[1]}</div>}
+          <div style={{ textAlign: 'center', flex: 1, opacity: game.activeIdx === 1 ? 1 : 0.4 }}>
+            <div style={{ fontSize: 12, fontWeight: 'bold', height: 18 }}>{game.activeIdx === 1 && !game.done ? '●投擲' : ''}</div>
+            <div style={{ fontSize: 16, fontWeight: 'bold' }}>{pData[1].name}</div>
+            {game.c0[1] > 0 && <div style={{ color: 'red', fontSize: 10 }}>ミス:{game.c0[1]}</div>}
           </div>
         </div>
       </div>
 
       {game.done ? (
-        <div className="card" style={{textAlign:'center', border:'2px solid var(--accent)'}}>
-          <p style={{fontSize:18, fontWeight:'bold'}}>🎉 {pData[game.winner].name} 勝利</p>
-          <button className="btn btn-primary" style={{marginTop:10, width:'100%'}} 
-            onClick={() => onResult(game.winner, game.history, game.logs)}> {/* game.logs を渡す */}
+        <div className="card" style={{ textAlign: 'center', border: '2px solid var(--accent)' }}>
+          <p style={{ fontSize: 18, fontWeight: 'bold' }}>🎉 {pData[game.winner].name} 勝利</p>
+          <button className="btn btn-primary" style={{ marginTop: 10, width: '100%' }}
+            onClick={() => onResult(game.winner, game.history, game.logs, {
+              timeUsedMs: [INIT_BANK_MS - game.bankMs[0], INIT_BANK_MS - game.bankMs[1]],
+              finalMode: game.clockMode,
+            })}>
             結果を送信して終了
           </button>
         </div>
       ) : (
-        <div style={{textAlign:'center'}}>
-          <ScorePanel onScore={(v) => setConfirm({who: game.activeIdx, val: v})} disabled={game.choicePending} />
+        <div style={{ textAlign: 'center' }}>
+          <ScorePanel
+            onScore={(v) => { if (!game.paused) setConfirm({ who: game.activeIdx, val: v }); }}
+            disabled={game.choicePending || game.paused}
+          />
         </div>
       )}
-      <button className="btn btn-sm" style={{marginTop:'10px', border:'none', color:'var(--text-sub)'}} onClick={onCancel}>試合を中断</button>
+      <button className="btn btn-sm" style={{ marginTop: 10, border: 'none', color: 'var(--text-sub)' }} onClick={onCancel}>試合を中断</button>
     </div>
   );
 }
@@ -395,7 +582,7 @@ function App() {
     alert("全てのデータをリセットしました。");
   };
 
-  const recordResult = (winIdx, history, logs) => { 
+  const recordResult = (winIdx, history, logs, clockUsage) => {
   if(new Date() > DEADLINE) return alert("期限切れ");
   const m = activeMatch;
   const winId = winIdx === 0 ? m.p1 : m.p2;
